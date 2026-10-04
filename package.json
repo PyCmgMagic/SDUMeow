@@ -1,0 +1,22 @@
+{
+  "name": "sdu-meow",
+  "private": true,
+  "version": "1.0.0",
+  "packageManager": "pnpm@11.19.0",
+  "scripts": {
+    "dev": "pnpm --filter @sdumeow/web dev",
+    "dev:legacy-pc": "pnpm --filter @sdumeow/pc dev",
+    "dev:legacy-mobile": "pnpm --filter @sdumeow/mobile dev",
+    "build": "pnpm clean && pnpm --filter @sdumeow/web build",
+    "build:legacy-pc": "pnpm --filter @sdumeow/pc build",
+    "build:legacy-mobile": "pnpm --filter @sdumeow/mobile build",
+    "typecheck": "pnpm --filter @sdumeow/web typecheck",
+    "lint": "pnpm --filter @sdumeow/web lint",
+    "test": "pnpm test:all",
+    "test:web": "pnpm --filter @sdumeow/web test:run",
+    "test:legacy-mobile": "pnpm --filter @sdumeow/mobile test:run",
+    "test:all": "pnpm test:web && pnpm test:legacy-mobile",
+    "preview": "pnpm --filter @sdumeow/web preview",
+    "clean": "node scripts/clean-dist.mjs"
+  }
+}

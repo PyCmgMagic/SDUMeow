@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SDU Meow · 移动端</title>
+    <script>
+      (() => {
+        const basePath = '%BASE_URL%'.replace(/\/+$/, '') || '/'
+        const currentPath = window.location.pathname.replace(/\/+$/, '') || '/'
+        const url = new URL(window.location.href)
+        const isManual = url.searchParams.get('manual') === '1'
+        if (isManual) {
+          url.searchParams.delete('manual')
+          window.history.replaceState(null, '', url.pathname + url.search + url.hash)
+          return
+        }
+        if (currentPath === basePath && !window.matchMedia('(max-width: 767px)').matches) {
+          window.location.replace('/pc/')
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

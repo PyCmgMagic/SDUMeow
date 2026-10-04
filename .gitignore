@@ -1,0 +1,27 @@
+# Dependencies and package-manager files
+node_modules
+.pnpm-store
+pnpm-debug.log*
+
+# Build and test output
+dist
+dist-ssr
+coverage
+*.local
+
+# Local source checkouts used while importing the original repositories
+.sources
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Editors and operating-system files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+Thumbs.db
+*.suo
+*.sw?

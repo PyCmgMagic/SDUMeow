@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>无访问权限 · SDU Meow</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <!--
+      Standalone 403 page for backend /api/auth/callback responses.
+      Do not auto-redirect — the HTML body must render as-is.
+
+      Preview: pnpm dev → http://localhost:5173/auth-forbidden.html
+      User login variant: ?target=user
+      Backend fallback: return this file as 403 response body (text/html).
+      Preferred redirect: 302 → /admin/login?authError=forbidden
+    -->
+    <style>
+      :root {
+        color-scheme: light;
+        --bg-top: #fff7ed;
+        --bg-bottom: #f4f4f5;
+        --card: #ffffff;
+        --ink: #1f2937;
+        --muted: #6b7280;
+        --danger-soft: #fef2f2;
+        --danger: #dc2626;
+        --danger-text: #991b1b;
+        --accent: #fbbf24;
+        --accent-hover: #f59e0b;
+        --ring: rgba(251, 191, 36, 0.35);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 32px 20px;
+        font-family:
+          "Segoe UI",
+          "PingFang SC",
+          "Microsoft YaHei",
+          sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 15% 10%, rgba(251, 191, 36, 0.22), transparent 38%),
+          radial-gradient(circle at 85% 0%, rgba(254, 202, 202, 0.35), transparent 42%),
+          linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+      }
+
+      .card {
+        width: min(100%, 560px);
+        padding: 48px 40px 40px;
+        border-radius: 28px;
+        background: var(--card);
+        text-align: center;
+        box-shadow:
+          0 24px 48px rgba(15, 23, 42, 0.08),
+          0 8px 20px rgba(15, 23, 42, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.85);
+      }
+
+      .icon-wrap {
+        display: grid;
+        place-items: center;
+        width: 88px;
+        height: 88px;
+        margin: 0 auto 24px;
+        border-radius: 999px;
+        background: linear-gradient(145deg, #fff1f2 0%, #fef2f2 100%);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+      }
+
+      .icon-wrap svg {
+        width: 42px;
+        height: 42px;
+        color: var(--danger);
+      }
+
+      .code {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0 0 16px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        background: var(--danger-soft);
+        color: var(--danger-text);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+      }
+
+      h1 {
+        margin: 0 0 14px;
+        font-size: clamp(1.75rem, 4vw, 2.125rem);
+        line-height: 1.25;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+
+      p {
+        margin: 0 auto;
+        max-width: 420px;
+        color: var(--muted);
+        font-size: 1.05rem;
+        line-height: 1.85;
+      }
+
+      .hint {
+        margin-top: 18px;
+        font-size: 0.92rem;
+        color: #9ca3af;
+      }
+
+      .actions {
+        margin-top: 36px;
+      }
+
+      a.button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: min(100%, 280px);
+        min-height: 52px;
+        padding: 0 28px;
+        border: none;
+        border-radius: 16px;
+        background: linear-gradient(180deg, #fcd34d 0%, var(--accent) 100%);
+        color: #1f2937;
+        font-size: 1rem;
+        font-weight: 800;
+        text-decoration: none;
+        box-shadow:
+          0 10px 24px rgba(251, 191, 36, 0.35),
+          inset 0 1px 0 rgba(255, 255, 255, 0.55);
+        transition:
+          transform 0.18s ease,
+          box-shadow 0.18s ease,
+          background 0.18s ease;
+      }
+
+      a.button:hover {
+        transform: translateY(-1px);
+        background: linear-gradient(180deg, #fde68a 0%, var(--accent-hover) 100%);
+        box-shadow:
+          0 14px 28px rgba(245, 158, 11, 0.32),
+          inset 0 1px 0 rgba(255, 255, 255, 0.55);
+      }
+
+      a.button:focus-visible {
+        outline: 3px solid var(--ring);
+        outline-offset: 3px;
+      }
+
+      a.button:active {
+        transform: translateY(0);
+        box-shadow:
+          0 6px 16px rgba(245, 158, 11, 0.28),
+          inset 0 1px 0 rgba(255, 255, 255, 0.55);
+      }
+
+      @media (max-width: 520px) {
+        .card {
+          padding: 36px 24px 28px;
+          border-radius: 22px;
+        }
+
+        .icon-wrap {
+          width: 76px;
+          height: 76px;
+          margin-bottom: 20px;
+        }
+
+        p {
+          font-size: 1rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card" role="alert" aria-labelledby="forbidden-title">
+      <div class="icon-wrap" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+          <path d="M12 8v4" />
+          <path d="M12 16h.01" />
+        </svg>
+      </div>
+      <div class="code">HTTP 403</div>
+      <h1 id="forbidden-title">无访问权限</h1>
+      <p id="forbidden-message">
+        当前统一认证账号没有相应访问权限，无法完成登录。如需开通权限，请联系系统管理员。
+      </p>
+      <p class="hint">返回登录页后，系统会提示具体失败原因。</p>
+      <div class="actions">
+        <a id="login-link" class="button" href="/admin/login?authError=forbidden">返回登录</a>
+      </div>
+    </main>
+    <script>
+      ;(function () {
+        var params = new URLSearchParams(location.search)
+        var target = params.get('target') === 'user' ? 'user' : 'admin'
+        var loginPath = target === 'user' ? '/login' : '/admin/login'
+        var loginHref = loginPath + '?authError=forbidden'
+        var title = target === 'user' ? '无访问权限' : '无管理员访问权限'
+        var message =
+          target === 'user'
+            ? '当前统一认证账号无法访问此功能，请确认账号权限或改用其他登录方式。'
+            : '当前统一认证账号没有管理后台权限，无法完成管理员登录。如需开通权限，请联系系统管理员。'
+
+        document.getElementById('forbidden-title').textContent = title
+        document.getElementById('forbidden-message').textContent = message
+
+        if (location.protocol === 'file:') {
+          loginHref = 'http://localhost:5173' + loginHref
+        }
+
+        document.getElementById('login-link').href = loginHref
+      })()
+    </script>
+  </body>
+</html>
