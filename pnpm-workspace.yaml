@@ -3,4 +3,4 @@ packages:
 allowBuilds:
   cos-js-sdk-v5: true
   esbuild: true
-  vue-demi: true
+  vue-demi: set this to true or false

@@ -16,7 +16,6 @@
   - `src/pc` — 桌面端壳与组件库（侧栏/顶栏/管理布局、shadcn/ui + radix-ui + zustand）
   - `src/mobile` — 移动端壳与组件库（根布局/底部导航、antd + @tanstack/react-query + zustand）
   - `src/shared` — 共享层（会话存储、JWT 解析、设备判定）
-- `apps/pc`、`apps/mobile`：融合前的原始仓库，仅作对照参考保留（`pnpm dev:legacy-pc` / `pnpm dev:legacy-mobile`），确认新版无差异后可整体删除
 
 ## 路由结构（统一后）
 
@@ -35,7 +34,7 @@
 
 **旧链接全部兼容**（重定向，可安全替换线上部署）：`/pc/*` 与 `/mobile/*` 前缀自动剥离；两端旧路径（如 `/cat/:id`、`/userCenter`、`/post`、`/ranking/:type`、`/user/home`、`/user/cats/:id`、`/admin/home` 等）映射到对应规范路径。
 
-统一认证回调（`?meow_token=`）在两端由各自原有逻辑处理，落库到共享会话。
+统一认证按新接口契约实现：前端跳转 `/auth/login`（带 `platform`），CAS 回调携带一次性 `login_code`，前端 `POST /auth/exchange` 换取令牌后落库到共享会话；同时兼容旧后端直接回传 `?meow_token=` 的行为。
 
 ## 开发
 

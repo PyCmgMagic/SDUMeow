@@ -9,18 +9,11 @@
 | 桌面端 | https://github.com/MissingYoung/MeowPC | Vue 3 + TypeScript + Vite + shadcn-vue |
 | 移动端 | https://github.com/Selena14111/sdumeow_web | React 19 + antd + react-query + Vite |
 
-本仓库里的保留位置（过渡期对照用，确认统一应用稳定后可整体删除）：
-
-- `apps/pc/` —— 桌面端原仓库的完整副本（Vue 3，保留用于对照构建）
-- `apps/mobile/` —— 移动端原仓库的完整副本（React，保留用于回归测试）
-- 两者保留是为了逐页对照验证；确认新版无差异后可删除这两个目录（仓库其余部分不依赖它们）
+两个原仓库的代码已在本仓库内完成 Vue→React 移植与融合，原始副本（过渡期的 `apps/pc/`、`apps/mobile/`）已删除。如需对照历史实现，请访问上方 GitHub 地址。
 
 ## 二、新项目在哪
 
-融合后的主前端应用：**`apps/web/`**。当前 pnpm workspace 仍包含 3 个应用包：
-`apps/web`（统一主应用）、`apps/pc`（Vue 版 legacy 对照工程）和
-`apps/mobile`（React 版 legacy 对照工程）。后两个包属于过渡期保留项，删除前仍由根脚本显式执行
-构建或回归测试。
+融合后的唯一前端应用：**`apps/web/`**（pnpm workspace 中唯一的应用包）。
 
 ```
 apps/web/
@@ -33,7 +26,7 @@ apps/web/
 │   ├── shared/              # 跨端共享：会话存储 / JWT 解析 / 设备判定
 │   └── main.tsx             # 唯一启动文件
 ├── mock/api.ts              # 开发态 Mock 后端（VITE_MOCK=1 时启用）
-└── tests/                   # 主应用单元测试（49 个）
+└── tests/                   # 单元测试（49 个）
 ```
 
 ## 三、怎么整合的（按实际执行顺序）
@@ -65,10 +58,11 @@ apps/web/
 - `jwt.ts`：统一 JWT 解析（原先两端各一份）
 - `device.ts`：统一设备判定
 
-### 第 5 步：契约审查与本地 Mock
+### 第 5 步：契约审查、本地 Mock 与原副本退役
 
-- 以《接口文件.openapi.yaml》逐字段核对两端客户端的请求与响应处理（结论见下方"契约风险"）
+- 以《接口文件.openapi.yaml》逐字段核对两端客户端的请求与响应处理（结论见下方"契约风险"）；统一认证已按新契约改造（CAS 回调携带一次性 `login_code`，前端 `POST /auth/exchange` 换取令牌，同时兼容旧 `meow_token` 回调）
 - `mock/api.ts`：依据接口文档构造的内存后端，`apps/web/.env.local` 设 `VITE_MOCK=1` 启用——无需真实账号即可联调全部页面（邮箱含 `admin` 即管理员，数据内存可变，重启复位）
+- 逐功能交互验证（搜索、发布、领养、SOS、签到、管理后台全部写流程）通过后，删除过渡期的 `apps/pc`、`apps/mobile` 原始副本，仓库收敛为单一应用
 
 ## 四、旧 URL → 新 URL 速查
 
@@ -95,9 +89,6 @@ apps/web/
 
 ## 六、验证状态
 
-- `pnpm typecheck` / `pnpm lint` / `pnpm test`（Web 49/49 + legacy Mobile 40/40）/ `pnpm build` 全部通过
-- `pnpm test` 现在执行 `test:all`：先运行主应用 Web 测试，再运行 legacy Mobile 测试；
-  也可分别使用 `pnpm test:web` 和 `pnpm test:legacy-mobile`。legacy PC 没有单元测试脚本，
-  以 `pnpm --filter @sdumeow/pc typecheck` 与 `pnpm build:legacy-pc` 作为回归门槛
-- 浏览器双视口全路由扫描通过；登录态下桌面 10 页、管理后台 9 页、移动端 16 页均用 Mock 数据实测渲染
+- `pnpm typecheck` / `pnpm lint` / `pnpm test`（49/49）/ `pnpm build` 全部通过
+- 浏览器双视口全路由扫描通过；登录态下桌面 10 页、管理后台 9 页、移动端 16 页均用 Mock 数据实测渲染；管理端写流程（封禁/公告/猫编辑/新喵入库/SOS 处理）与用户端写流程（签到/发布/投喂/点赞/搜索）全部端到端实测通过
 - 部署：静态托管把所有路径回退到 `index.html` 即可（如 Nginx `try_files $uri /index.html`）
