@@ -79,7 +79,7 @@ export async function getCatDetail(catId: string): Promise<ApiResult<CatDetail>>
       avatar: cat.avatar,
       images,
       basicInfo: {
-        color: cat.color,
+        color: firstPresent(row.colorName, basicInfo.colorName, row.color, basicInfo.color, cat.color) as string | number | undefined,
         colorId: firstPresent(row.colorId, basicInfo.colorId, row.color, basicInfo.color, cat.color) as string | number | undefined,
         gender: firstPresent(row.gender, basicInfo.gender) as string | number | undefined,
         campus: firstPresent(row.campus, basicInfo.campus, row.campusCode, cat.campus) as string | number | undefined,

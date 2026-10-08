@@ -20,13 +20,13 @@ apps/web/
 ├── index.html               # 唯一入口（站点根部署）
 ├── src/
 │   ├── app/                 # 统一路由树（规范路径 + 旧 URL 重定向）
-│   ├── pages/<页面>/        # 当前 41 个页面/路由模块：index + DesktopLayout + MobileLayout
+│   ├── pages/<页面>/        # 当前 42 个页面/路由模块：index + DesktopLayout + MobileLayout
 │   ├── pc/                  # 桌面端壳与组件库（侧栏/顶栏/管理布局、shadcn/ui）
 │   ├── mobile/              # 移动端壳与组件库（根布局/底部导航、antd）
 │   ├── shared/              # 跨端共享：会话存储 / JWT 解析 / 设备判定
 │   └── main.tsx             # 唯一启动文件
 ├── mock/api.ts              # 开发态 Mock 后端（VITE_MOCK=1 时启用）
-└── tests/                   # 单元测试（49 个）
+└── tests/                   # 单元测试（13 个文件、50 个用例）
 ```
 
 ## 三、怎么整合的（按实际执行顺序）
@@ -89,6 +89,6 @@ apps/web/
 
 ## 六、验证状态
 
-- `pnpm typecheck` / `pnpm lint` / `pnpm test`（49/49）/ `pnpm build` 全部通过
+- `pnpm typecheck` / `pnpm lint` / `pnpm test`（50/50）/ `pnpm build` 全部通过
 - 浏览器双视口全路由扫描通过；登录态下桌面 10 页、管理后台 9 页、移动端 16 页均用 Mock 数据实测渲染；管理端写流程（封禁/公告/猫编辑/新喵入库/SOS 处理）与用户端写流程（签到/发布/投喂/点赞/搜索）全部端到端实测通过
 - 部署：静态托管把所有路径回退到 `index.html` 即可（如 Nginx `try_files $uri /index.html`）

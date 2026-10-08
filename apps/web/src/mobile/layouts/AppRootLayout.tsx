@@ -11,6 +11,10 @@ import { inferRoleFromProfile, inferRoleFromToken } from '@/utils/auth'
 import { STORAGE_KEYS } from '@/utils/constants'
 import { asNumber, asRecord, asString } from '@/utils/format'
 import { storage } from '@/utils/storage'
+import { useAuth } from '@/hooks/useAuth'
+import { BottomNav } from '@/components/navigation/BottomNav'
+import { PersistentUserNavigationContext } from '@/components/navigation/navigationContext'
+import { userNavItems } from '@/components/navigation/userNavItems'
 
 function buildProfile(profileData: unknown, role: UserRole) {
   const me = asRecord(profileData)
@@ -157,8 +161,12 @@ function AuthCallbackHandler() {
 
 export function AppRootLayout() {
   const location = useLocation()
+  const { hydrated, isAuthenticated, isAdmin, isGuest } = useAuth()
   const params = new URLSearchParams(location.search)
   const isAuthCallback = params.has('meow_token') || params.has('login_code')
+  const showPersistentNavigation = !isAuthCallback && hydrated && isAuthenticated
+    && userNavItems.some((item) => item.to === location.pathname)
+    && (location.pathname === '/' ? !isAdmin : !isGuest)
 
   return (
     <div className="min-h-screen bg-[#e0e5ec]">
@@ -166,8 +174,11 @@ export function AppRootLayout() {
       {isAuthCallback ? (
         <div className="flex min-h-screen items-center justify-center text-sm text-[#666]">正在完成登录...</div>
       ) : (
-        <Outlet />
+        <PersistentUserNavigationContext.Provider value={showPersistentNavigation}>
+          <Outlet />
+        </PersistentUserNavigationContext.Provider>
       )}
+      {showPersistentNavigation ? <BottomNav items={userNavItems} /> : null}
     </div>
   )
 }

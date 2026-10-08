@@ -3,10 +3,11 @@ import { Button, Modal } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
-import { buildAuthAdminLoginUrl, buildAuthLoginUrl } from '@/api/endpoints/auth'
+import { adminLogin, buildAuthAdminLoginUrl, buildAuthLoginUrl, getAuthTokens, login as passwordLogin } from '@/api/endpoints/auth'
 import logo from '@/assets/猫猫图鉴-logo.png'
 import { useAuth } from '@/hooks/useAuth'
 import { usePageTitle } from '@/hooks/usePageTitle'
+import { UserRole } from '@/types/enums'
 import { STORAGE_KEYS } from '@/utils/constants'
 import { storage } from '@/utils/storage'
 import { withAppBasePath } from '@/utils/appPath'
@@ -28,15 +29,38 @@ export function MobileLayout() {
   usePageTitle('登录')
   const navigate = useNavigate()
   const location = useLocation()
-  const { enterGuest } = useAuth()
+  const { enterGuest, login } = useAuth()
   const hasShownLoginNoticeRef = useRef(false)
   const [redirecting, setRedirecting] = useState<'user' | 'admin' | null>(null)
   const [loginNotice, setLoginNotice] = useState('')
   const loginUrl = useMemo(() => buildAuthLoginUrl({ platform: 'mobile' }), [])
   const adminLoginUrl = useMemo(() => buildAuthAdminLoginUrl({ platform: 'mobile' }), [])
+  const isMock = import.meta.env.VITE_MOCK === '1'
+
+  const handleMockLogin = useCallback(async (mode: 'user' | 'admin') => {
+    try {
+      const result = mode === 'admin'
+        ? await adminLogin({ email: 'admin@sdumeow.cn', password: 'meow123' })
+        : await passwordLogin({ email: 'user@sdumeow.cn', password: 'meow123' })
+      const tokens = getAuthTokens(result.data)
+      if (!tokens.accessToken) throw new Error('Mock 登录未返回有效令牌')
+      const role = mode === 'admin' ? UserRole.Admin : UserRole.User
+      storage.setTokens({ token: tokens.accessToken, refreshToken: tokens.refreshToken }, mode === 'admin' ? 'admin' : 'user')
+      login({ token: tokens.accessToken, role })
+      navigate(mode === 'admin' ? '/admin/dashboard' : '/', { replace: true })
+    } catch (error) {
+      setRedirecting(null)
+      setLoginNotice(error instanceof Error ? error.message : '演示账号登录失败')
+    }
+  }, [login, navigate])
 
   const handleSduLogin = useCallback((mode: 'user' | 'admin') => {
     setRedirecting(mode)
+
+    if (isMock) {
+      void handleMockLogin(mode)
+      return
+    }
 
     if (shouldBridgeToLocalhost()) {
       window.location.assign(buildLocalhostLoginUrl(mode))
@@ -50,7 +74,7 @@ export function MobileLayout() {
       return
     }
     window.location.assign(adminLoginUrl)
-  }, [adminLoginUrl, loginUrl])
+  }, [adminLoginUrl, handleMockLogin, isMock, loginUrl])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -91,10 +115,10 @@ export function MobileLayout() {
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-[390px] flex-col items-center bg-white px-6 pb-10 pt-24">
       <div className="mb-7">
-        <img alt="SDU Meow logo" className="h-28 w-auto object-contain" src={logo} />
+        <img alt="SDU Meow logo" className="h-28 w-auto rounded-3xl object-contain" src={logo} />
       </div>
       <h1 className="text-[26px] font-bold text-[#1a1a1a]">Hello, 校友</h1>
-      <p className="mt-2 text-[14px] text-[#9e9e9e]">欢迎回到山大猫猫图鉴</p>
+      <p className="mt-2 text-[14px] text-[#9e9e9e]">欢迎回到猫猫图鉴</p>
 
       <div className="mt-9 w-full rounded-[24px] bg-white px-5 py-6 shadow-[0_10px_24px_rgba(0,0,0,0.08)]">
         <Button
@@ -102,23 +126,30 @@ export function MobileLayout() {
           className="dark-pill-btn !h-[50px] !text-[16px]"
           icon={<ArrowRightOutlined />}
           iconPosition="end"
+          disabled={redirecting !== null}
           loading={redirecting === 'user'}
           type="primary"
           onClick={() => handleSduLogin('user')}
         >
-          {redirecting ? '正在前往统一认证' : '山东大学统一认证登录'}
+          {redirecting ? (isMock ? '正在登录演示账号' : '正在前往统一认证') : (isMock ? '使用普通用户演示账号登录' : '山东大学统一认证登录')}
         </Button>
         <Button
           block
           className="!mt-3 !h-[46px] !text-[15px]"
           icon={<ArrowRightOutlined />}
           iconPosition="end"
+          disabled={redirecting !== null}
           loading={redirecting === 'admin'}
           onClick={() => handleSduLogin('admin')}
         >
-          &#31649;&#29702;&#21592;&#30331;&#24405;
+          {isMock ? '使用管理员演示账号登录' : '管理员登录'}
         </Button>
-        <p className="mt-4 text-center text-[12px] text-[#c7c7c7]">SDU Meow V2.3</p>
+        {isMock ? (
+          <p className="mt-4 text-center text-[12px] leading-5 text-[#8c8c8c]">
+            本地演示账号：user@sdumeow.cn / meow123<br />
+            管理员：admin@sdumeow.cn / meow123
+          </p>
+        ) : null}
       </div>
 
       <button className="mt-7 text-[12px] text-[#9e9e9e]" type="button" onClick={handleGuest}>

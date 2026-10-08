@@ -1,25 +1,21 @@
-import { HomeFilled, PlusSquareFilled, UserOutlined } from '@ant-design/icons'
 import { useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useContext, useEffect, useRef, type ReactNode } from 'react'
 import { Outlet } from 'react-router-dom'
 
 import { checkin } from '@/api/endpoints/user'
 import { BottomNav } from '@/components/navigation/BottomNav'
+import { PersistentUserNavigationContext } from '@/components/navigation/navigationContext'
+import { userNavItems } from '@/components/navigation/userNavItems'
 import { useAuth } from '@/hooks/useAuth'
 import { UserRole } from '@/types/enums'
 import { asNumber, asRecord } from '@/utils/format'
-
-const navItems = [
-  { key: 'home', label: '首页', to: '/', icon: <HomeFilled /> },
-  { key: 'publish', label: '发布', to: '/publish', icon: <PlusSquareFilled /> },
-  { key: 'me', label: '我的', to: '/profile', icon: <UserOutlined /> },
-]
 
 const AUTO_CHECKIN_TOTAL_DAYS_STORAGE_KEY = 'user:auto-checkin:total-days'
 const AUTO_CHECKIN_CONTINUOUS_DAYS_STORAGE_KEY = 'user:auto-checkin:continuous-days'
 
 // 统一路由下既作为 /user 布局组的 Outlet 容器，也支持直接包裹单页（children 优先）。
 export function UserLayout({ children }: { children?: ReactNode }) {
+  const persistentNavigation = useContext(PersistentUserNavigationContext)
   const { role, token, hydrated } = useAuth()
   const queryClient = useQueryClient()
   const hasTriggeredRef = useRef(false)
@@ -56,7 +52,7 @@ export function UserLayout({ children }: { children?: ReactNode }) {
   return (
     <div className="h5-shell">
       {children ?? <Outlet />}
-      <BottomNav items={navItems} />
+      {persistentNavigation ? null : <BottomNav items={userNavItems} />}
     </div>
   )
 }

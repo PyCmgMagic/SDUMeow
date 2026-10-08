@@ -7,12 +7,13 @@ import { toast } from '@pc/lib/toast'
 import { useAuthQueryFeedback } from '@pc/composables/useAuthQueryFeedback'
 import { useUserStore } from '@pc/stores/user'
 import { getSduAuthUrl, setAuthIntent } from '@pc/lib/auth'
-import logo from '@pc/assets/brand/catmap-logo.png'
+import logo from '@/assets/猫猫图鉴-logo.png'
 
 export function DesktopLayout() {
   const location = useLocation()
   const navigate = useNavigate()
-  const [form, setForm] = useState({ email: '', password: '' })
+  const isMock = import.meta.env.VITE_MOCK === '1'
+  const [form, setForm] = useState({ email: isMock ? 'admin@sdumeow.cn' : '', password: isMock ? 'meow123' : '' })
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [sduLoading, setSduLoading] = useState(false)
@@ -107,6 +108,9 @@ export function DesktopLayout() {
           ) : null}
 
           <div className="auth-form-fields">
+            {isMock ? (
+              <p className="text-center text-sm leading-6 text-gray-500">演示账号已填好：admin@sdumeow.cn / meow123</p>
+            ) : null}
             <label className="auth-field" htmlFor="admin-login-email">
               <span>管理员邮箱</span>
               <Input

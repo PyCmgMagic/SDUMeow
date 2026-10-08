@@ -9,7 +9,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@pc/components/ui/avatar'
 import { useVueTransition } from '@pc/components/ui/utils'
 import { ThemeModeSwitch } from '@pc/components/layout/ThemeModeSwitch'
 
-import logo from '@pc/assets/brand/catmap-logo.png'
+import logo from '@/assets/猫猫图鉴-logo.png'
 import iconHome from '@pc/assets/icons/home.svg'
 import iconPost from '@pc/assets/icons/post.svg'
 import iconFound from '@pc/assets/icons/found.svg'

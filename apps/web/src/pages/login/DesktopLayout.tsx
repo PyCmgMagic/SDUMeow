@@ -7,7 +7,7 @@ import { Input } from '@pc/components/ui/input'
 import { useAuthQueryFeedback } from '@pc/composables/useAuthQueryFeedback'
 import { useUserStore } from '@pc/stores/user'
 import { getSduAuthUrl, setAuthIntent } from '@pc/lib/auth'
-import logo from '@pc/assets/brand/catmap-logo.png'
+import logo from '@/assets/猫猫图鉴-logo.png'
 
 export function DesktopLayout() {
   const location = useLocation()
@@ -15,7 +15,8 @@ export function DesktopLayout() {
   const [sduLoading, setSduLoading] = useState(false)
   const [passwordLoading, setPasswordLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [form, setForm] = useState({ email: '', password: '' })
+  const isMock = import.meta.env.VITE_MOCK === '1'
+  const [form, setForm] = useState({ email: isMock ? 'user@sdumeow.cn' : '', password: isMock ? 'meow123' : '' })
   const login = useUserStore((state) => state.login)
 
   const { authNotice, dismissAuthNotice } = useAuthQueryFeedback({
@@ -72,7 +73,7 @@ export function DesktopLayout() {
           <img src={logo} alt="SDU Meow" className="auth-logo" />
           <p className="auth-eyebrow">SDU MEOW / CAMPUS CAT DIRECTORY</p>
           <h1 id="login-title" className="auth-title">Hello，校友！</h1>
-          <p className="auth-subtitle">欢迎回到山大猫猫图鉴</p>
+          <p className="auth-subtitle">欢迎回到猫猫图鉴</p>
         </header>
 
         <div className="auth-card-body">
@@ -100,6 +101,9 @@ export function DesktopLayout() {
           </Button>
 
           <div className="auth-divider">邮箱密码登录</div>
+          {isMock ? (
+            <p className="mb-4 text-center text-sm leading-6 text-gray-500">演示账号已填好：user@sdumeow.cn / meow123</p>
+          ) : null}
           <form
             className="auth-form-fields"
             onSubmit={(event) => {

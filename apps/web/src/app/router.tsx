@@ -178,6 +178,7 @@ const legacyRedirects: RouteObject[] = [
   { path: '/user/me/edit', loader: () => redirect('/me/edit') },
   { path: '/user/me-center', loader: () => redirect('/me') },
   { path: '/user/me', loader: () => redirect('/profile') },
+  { path: '/user/team', loader: () => redirect('/team') },
   { path: '/admin/home', loader: () => redirect('/admin/dashboard') },
 ]
 
@@ -312,6 +313,11 @@ export const router = createBrowserRouter(
           path: 'notifications',
           handle: { name: 'notifications' },
           ...page(() => import('../pages/notifications')),
+        },
+        {
+          path: 'team',
+          handle: { name: 'team' },
+          ...page(() => import('../pages/team')),
         },
 
         // ---- 管理端（守卫与管理布局由本分支提供，页面组件只做设备切换） ----

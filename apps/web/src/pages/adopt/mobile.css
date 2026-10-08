@@ -1,0 +1,378 @@
+.adoption-mobile {
+  --adopt-ink: #4a4038;
+  --adopt-accent: #ffd54f;
+  --adopt-tint: #fff8e1;
+  color: var(--adopt-ink);
+  background: #f8f6f4;
+  padding-bottom: 20px;
+}
+
+.adoption-mobile__header {
+  position: relative;
+  padding: 28px 20px 20px;
+  background: #fffdf9;
+  border-bottom: 0;
+  box-shadow: 0 8px 20px rgb(91 65 26 / 0.07);
+}
+
+.adoption-mobile__back {
+  position: absolute;
+  top: 24px;
+  left: 16px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  color: #6f6258;
+  box-shadow: 0 5px 14px rgb(91 65 26 / 0.1);
+}
+
+.adoption-mobile__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 54px;
+}
+
+.adoption-mobile__brand > svg {
+  box-sizing: content-box;
+  padding: 10px;
+  border: 0;
+  border-radius: 50%;
+  background: #ffd54f;
+  box-shadow: 0 5px 12px rgb(91 65 26 / 0.12);
+}
+
+.adoption-mobile__brand span {
+  display: block;
+  color: #b87912;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.adoption-mobile__brand h1 {
+  margin: 2px 0 0;
+  font-size: 23px;
+  font-weight: 800;
+  line-height: 1.3;
+  color: #3d342e;
+}
+
+.adoption-mobile__intro {
+  margin-top: 18px;
+  color: #887b70;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.adoption-mobile__steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 20px;
+}
+
+.adoption-mobile__steps > div {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  color: #a0958d;
+  font-size: 11px;
+}
+
+.adoption-mobile__steps > div:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 13px;
+  left: calc(50% + 20px);
+  width: calc(100% - 40px);
+  height: 1px;
+  background: #e9dfd4;
+}
+
+.adoption-mobile__steps b {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  font-size: 12px;
+  background: #eee9e3;
+  color: #948980;
+}
+
+.adoption-mobile__steps .is-active {
+  color: #a96d0b;
+  font-weight: 700;
+}
+.adoption-mobile__steps .is-active b {
+  border-color: var(--adopt-ink);
+  background: #ffd54f;
+  color: #5c4615;
+  box-shadow: 0 4px 10px rgb(224 164 28 / 0.2);
+}
+.adoption-mobile__content {
+  padding: 16px;
+}
+.adoption-mobile__notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #fff8e1;
+  color: #806b45;
+  font-size: 12px;
+  line-height: 1.65;
+  box-shadow: 0 5px 14px rgb(91 65 26 / 0.04);
+}
+.adoption-mobile__notice svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.adoption-mobile__section {
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 0;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 8px 22px rgb(91 65 26 / 0.08);
+}
+.adoption-mobile__section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -16px -16px 16px;
+  padding: 13px 16px;
+  border-bottom: 0;
+  border-radius: 16px 16px 0 0;
+  background: #fffaf0;
+  color: #6f5d46;
+}
+.adoption-mobile__section-title h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 750;
+  color: #4a4038;
+}
+.adoption-mobile .ant-form-item {
+  margin-bottom: 20px;
+}
+.adoption-mobile__section > .ant-form-item:last-child,
+.adoption-mobile__contact-grid > .ant-form-item:last-child {
+  margin-bottom: 0;
+}
+.adoption-mobile .ant-form-item-label > label {
+  color: #5b5047;
+  font-size: 13px;
+  font-weight: 600;
+}
+.adoption-mobile .ant-form-item-required::before {
+  color: #d48c29 !important;
+}
+
+.adoption-mobile .ant-select {
+  width: 100%;
+}
+.adoption-mobile .adoption-mobile__cat-select .ant-select-selector {
+  height: 68px;
+  padding: 8px 12px;
+  border: 1px solid #eadfce;
+  border-radius: 14px;
+  background: #fffdf9;
+  box-shadow: inset 0 1px 2px rgb(91 65 26 / 0.03);
+}
+.adoption-mobile .adoption-mobile__cat-select .ant-select-selection-item {
+  padding-right: 16px;
+}
+.adoption-mobile__cat-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  line-height: 1.4;
+}
+.adoption-mobile__cat-option img {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: #fff1c5;
+}
+.adoption-mobile__cat-option strong {
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adoption-mobile__cat-option em {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 11px;
+  font-style: normal;
+  color: #9a805b;
+}
+
+.adoption-mobile .adoption-mobile__choice-grid {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+.adoption-mobile__choice-grid--housing {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.adoption-mobile__choice-grid--experience {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.adoption-mobile .adoption-mobile__choice-grid .ant-radio-button-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 54px;
+  padding: 10px 8px;
+  border: 1px solid #eee3d7;
+  border-radius: 14px;
+  background: #fffdf9;
+  color: #80746a;
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: none;
+}
+.adoption-mobile .adoption-mobile__choice-grid .ant-radio-button-wrapper::before {
+  display: none;
+}
+.adoption-mobile .adoption-mobile__choice-grid .ant-radio-button-wrapper > span:last-child {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.adoption-mobile .adoption-mobile__choice-grid .ant-radio-button-wrapper svg {
+  flex-shrink: 0;
+}
+.adoption-mobile .adoption-mobile__choice-grid .ant-radio-button-wrapper-checked {
+  border-color: #f0c445;
+  background: #fff8df;
+  color: #a46b0b;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgb(224 164 28 / 0.12);
+}
+.adoption-mobile .adoption-mobile__choice-grid--experience .ant-radio-button-wrapper > span:last-child {
+  flex-direction: column;
+  gap: 7px;
+}
+.adoption-mobile .adoption-mobile__choice-grid--experience .ant-radio-button-wrapper {
+  position: relative;
+  min-height: 70px;
+}
+.adoption-mobile__choice-grid svg:last-child:not(:first-child) {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+}
+
+.adoption-mobile .ant-input-affix-wrapper,
+.adoption-mobile textarea.ant-input {
+  border: 1px solid #eadfce;
+  border-radius: 14px;
+  background: #fffdf9;
+  color: #4a4038;
+  font-size: 16px;
+}
+.adoption-mobile .ant-input-affix-wrapper {
+  min-height: 48px;
+  padding: 10px 12px;
+}
+.adoption-mobile .ant-input-affix-wrapper .ant-input {
+  background: transparent;
+  font-size: 16px;
+}
+.adoption-mobile .ant-input-prefix {
+  margin-right: 10px;
+  color: #a49382;
+}
+.adoption-mobile textarea.ant-input {
+  padding: 12px;
+  line-height: 1.7;
+  resize: vertical;
+}
+.adoption-mobile .ant-input::placeholder {
+  font-size: 13px;
+  color: #aa9d91;
+}
+.adoption-mobile__submit {
+  padding: 4px 2px 0;
+}
+.adoption-mobile .ant-checkbox-wrapper {
+  align-items: flex-start;
+  color: #85786d;
+  font-size: 12px;
+  line-height: 1.9;
+}
+.adoption-mobile .ant-checkbox {
+  margin-top: 3px;
+}
+.adoption-mobile .ant-checkbox-inner {
+  border-color: #d4c6b5;
+  border-radius: 5px;
+}
+.adoption-mobile .ant-checkbox-checked .ant-checkbox-inner {
+  border-color: #e5b62f;
+  background: #e5b62f;
+}
+.adoption-mobile .ant-btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 52px;
+  border: 0;
+  border-radius: 999px;
+  background: #ffd54f;
+  color: #5a4513;
+  font-size: 15px;
+  font-weight: 750;
+  box-shadow: 0 7px 16px rgb(224 164 28 / 0.22);
+}
+.adoption-mobile .ant-btn-primary:not(:disabled):not(.ant-btn-disabled):active {
+  background: #f5c83d;
+  color: #5a4513;
+}
+.adoption-mobile button:focus-visible,
+.adoption-mobile .ant-radio-button-wrapper:has(input:focus-visible),
+.adoption-mobile .ant-checkbox-wrapper:has(input:focus-visible) {
+  outline: 2px solid #a16207;
+  outline-offset: 3px;
+}
+.adoption-mobile .ant-select-focused .ant-select-selector,
+.adoption-mobile .ant-input-affix-wrapper-focused,
+.adoption-mobile textarea.ant-input:focus {
+  border-color: #efc44a;
+  box-shadow: 0 0 0 3px rgb(255 213 79 / 0.2);
+}
+@media (hover: hover) and (pointer: fine) {
+  .adoption-mobile .ant-btn-primary:not(:disabled):not(.ant-btn-disabled):hover {
+    background: #f5c83d;
+    color: #5a4513;
+    border-color: transparent;
+  }
+}
+@media (max-width: 340px) {
+  .adoption-mobile .adoption-mobile__choice-grid .ant-radio-button-wrapper {
+    font-size: 12px;
+    padding-inline: 6px;
+  }
+  .adoption-mobile__brand {
+    gap: 8px;
+  }
+  .adoption-mobile__brand span {
+    font-size: 8px;
+  }
+}

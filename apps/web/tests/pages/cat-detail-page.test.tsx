@@ -23,6 +23,10 @@ const userApiMocks = vi.hoisted(() => ({
   getMe: vi.fn(),
 }))
 
+const typesApiMocks = vi.hoisted(() => ({
+  getColors: vi.fn(), getLocations: vi.fn(), getRoles: vi.fn(), getTags: vi.fn(),
+}))
+
 const antdMocks = vi.hoisted(() => ({
   modalSuccess: vi.fn(),
   messageError: vi.fn(),
@@ -44,6 +48,8 @@ vi.mock('@/api/endpoints/moments', () => ({
 vi.mock('@/api/endpoints/user', () => ({
   getMe: userApiMocks.getMe,
 }))
+
+vi.mock('@/api/endpoints/types', () => typesApiMocks)
 
 vi.mock('antd', async () => {
   const actual = await vi.importActual<typeof Antd>('antd')
@@ -76,6 +82,7 @@ function renderCatDetail() {
       <MemoryRouter initialEntries={['/cats/cat-1']}>
         <Routes>
           <Route element={<CatDetailPage />} path="/cats/:id" />
+          <Route element={<p>领养申请 cat-1</p>} path="/adopt" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -87,6 +94,10 @@ function renderCatDetail() {
 describe('CatDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    typesApiMocks.getColors.mockResolvedValue(apiResult([{ id: 1, label: '橘白' }]))
+    typesApiMocks.getLocations.mockResolvedValue(apiResult([{ id: 1, label: '食堂北侧花坛' }]))
+    typesApiMocks.getRoles.mockResolvedValue(apiResult([]))
+    typesApiMocks.getTags.mockResolvedValue(apiResult([{ id: 1, name: '亲人' }]))
     catsApiMocks.getCatDetail.mockResolvedValue(
       apiResult({
         id: 'cat-1',
@@ -116,6 +127,46 @@ describe('CatDetailPage', () => {
     momentsApiMocks.deleteMoment.mockResolvedValue(apiResult({}))
     userApiMocks.getMe.mockResolvedValue(apiResult({ currency: 5, stats: { feedCount: 2 } }))
     catsApiMocks.feedCat.mockResolvedValue(apiResult({ userCurrency: 4 }))
+  })
+
+  it('renders the full archive and opens adoption for this cat', async () => {
+    catsApiMocks.getCatDetail.mockResolvedValue(apiResult({
+      id: 'cat-1', name: '橘座', aliases: ['大橘', '橘部长'],
+      basicInfo: {
+        color: 1, gender: 1, campus: 5, status: '在校', hauntLocation: 1,
+        healthStatus: 0, lastSeenTime: '2026-10-01T17:40:00',
+        neutered: { isNeutered: true, neuteredDate: '2024-03-12' },
+      },
+      tags: [1], popularity: 428,
+    }))
+    renderCatDetail()
+
+    expect(await screen.findByText('橘白')).toBeInTheDocument()
+    expect(screen.getByText('公猫')).toBeInTheDocument()
+    expect(screen.getByText('软件园校区')).toBeInTheDocument()
+    expect(screen.getByText('2024-03-12')).toBeInTheDocument()
+    expect(screen.getByText('健康')).toBeInTheDocument()
+    expect(screen.getByText('428')).toBeInTheDocument()
+    expect(screen.getByText('别名：大橘、橘部长')).toBeInTheDocument()
+    expect(screen.getByText('亲人')).toBeInTheDocument()
+    expect(screen.getByText(/2026.*10.*01.*17:40/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '申请领养此猫' }))
+    expect(await screen.findByText('领养申请 cat-1')).toBeInTheDocument()
+  })
+
+  it.each(['毕业', '喵星', '领养交接中'])('disables adoption for %s cats', async (status) => {
+    catsApiMocks.getCatDetail.mockResolvedValue(apiResult({ id: 'cat-1', name: 'Mimi', basicInfo: { status } }))
+    renderCatDetail()
+    expect(await screen.findByRole('button', { name: /暂不可申请领养/ })).toBeDisabled()
+  })
+
+  it('shows all fetched moments instead of truncating to three', async () => {
+    momentsApiMocks.getMoments.mockResolvedValue(apiResult({
+      items: Array.from({ length: 4 }, (_, index) => ({ id: `post-${index}`, content: `动态 ${index + 1}` })),
+    }))
+    renderCatDetail()
+    expect(await screen.findByText('动态 4')).toBeInTheDocument()
   })
 
   it('updates fish currency and cached feed count after feeding', async () => {

@@ -18,6 +18,7 @@ import { normalizeSearchItems } from '@pc/lib/search'
 import type { UnifiedSearchItem } from '@pc/types'
 import { useThemeStore } from '@pc/stores/theme'
 import { AdminThemeModeSwitch } from '@pc/components/layout/AdminThemeModeSwitch'
+import logo from '@/assets/猫猫图鉴-logo.png'
 
 const menuGroups = [
   {
@@ -186,21 +187,7 @@ export function AdminLayout() {
         {/* Logo 区域 */}
         <div className="admin-sidebar-brand flex h-20 items-center justify-between px-6">
           <div className="flex items-center min-w-0">
-            {/* 替换为你的猫猫 Logo 图标 */}
-            <svg
-              className="admin-brand-icon mr-3 size-8"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 5c.67 0 1.35.09 2 .26 1.78-2 5.03-2.84 6.42-2.26 1.4.58-.42 7-.42 7 .57 1.07 1 2.24 1 3.44C21 17.9 16.97 21 12 21s-9-3.1-9-7.56c0-1.25.5-2.4 1.1-3.48 0 0-1.93-6.42-.53-7 1.4-.58 4.5 0 6.28 2 .67-.18 1.34-.27 2-.27z"></path>
-              <path d="M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5"></path>
-              <path d="M9 13h.01"></path>
-              <path d="M15 13h.01"></path>
-            </svg>
+            <img src={logo} alt="SDU Meow logo" className="mr-3 size-8 shrink-0 rounded-lg object-contain" />
             <span className="text-2xl font-black tracking-tight truncate">SDU Meow</span>
           </div>
           <button

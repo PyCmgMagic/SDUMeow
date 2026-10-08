@@ -12,19 +12,21 @@ import {
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, Modal, Progress, message } from 'antd'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { normalizeDynamicTypeLabel, normalizeDynamicTypeOptions } from '@/api/adapters/types'
 import { feedCat, getCatDetail } from '@/api/endpoints/cats'
 import { deleteMoment, getMoments, likeMoment, unlikeMoment } from '@/api/endpoints/moments'
-import { getLocations, getRoles } from '@/api/endpoints/types'
+import { getColors, getLocations, getRoles, getTags } from '@/api/endpoints/types'
 import { getMe } from '@/api/endpoints/user'
 import { QueryState } from '@/components/feedback/QueryState'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { CAT_METRIC_LABELS } from './shared'
 import type { ApiResult } from '@/types/api'
 import { asArray, asRecord, asString, toPaged } from '@/utils/format'
+import { CampusMap, GenderMap, HealthStatusMap } from '@pc/types'
+import { getCatAdoptionUnavailableReason } from '@pc/lib/cat'
 
 type MomentView = {
   id: string
@@ -280,6 +282,7 @@ export function MobileLayout() {
   const location = useLocation()
   const { id = '1' } = useParams()
   const queryClient = useQueryClient()
+  const [selectedImage, setSelectedImage] = useState('')
 
   const detailQuery = useQuery({
     queryKey: ['cat-detail', id],
@@ -291,6 +294,13 @@ export function MobileLayout() {
     queryFn: getRoles,
   })
   const roleOptions = useMemo(() => normalizeDynamicTypeOptions(rolesQuery.data?.data), [rolesQuery.data?.data])
+  const colorsQuery = useQuery({
+    queryKey: ['type', 'colors'],
+    queryFn: getColors,
+  })
+  const colorOptions = useMemo(() => normalizeDynamicTypeOptions(colorsQuery.data?.data), [colorsQuery.data?.data])
+  const tagsQuery = useQuery({ queryKey: ['type', 'tags'], queryFn: getTags })
+  const tagOptions = useMemo(() => normalizeDynamicTypeOptions(tagsQuery.data?.data), [tagsQuery.data?.data])
   const locationsQuery = useQuery({
     queryKey: ['type', 'locations'],
     queryFn: getLocations,
@@ -434,14 +444,32 @@ export function MobileLayout() {
 
   const heroImage = useMemo(() => {
     const images = detail?.images ?? []
-    return stateAvatar || detail?.avatar || images[0] || ''
-  }, [detail?.avatar, detail?.images, stateAvatar])
+    return selectedImage && images.includes(selectedImage) ? selectedImage : stateAvatar || detail?.avatar || images[0] || ''
+  }, [detail?.avatar, detail?.images, selectedImage, stateAvatar])
 
   const statusText = basicInfo?.status || '在校'
   const roleText = normalizeDynamicTypeLabel(basicInfo?.role, roleOptions, normalizeRoleText(basicInfo?.role))
   const hauntLocationText = normalizeDynamicTypeLabel(basicInfo?.hauntLocation, locationOptions, normalizeLocationText(basicInfo?.hauntLocation))
-  const locationText = [basicInfo?.campus, hauntLocationText].filter(Boolean).join(' · ') || '未知地点'
+  const colorText = normalizeDynamicTypeLabel(basicInfo?.color, colorOptions, asString(basicInfo?.color, '未知'))
+  const campusText = CampusMap[Number(basicInfo?.campus)] || asString(basicInfo?.campus, '未知')
+  const genderText = GenderMap[Number(basicInfo?.gender) as keyof typeof GenderMap] || asString(basicInfo?.gender, '未知')
+  const healthText = HealthStatusMap[Number(basicInfo?.healthStatus) as keyof typeof HealthStatusMap] || asString(basicInfo?.healthStatus, '未知')
+  const locationText = [campusText, hauntLocationText].filter(Boolean).join(' · ')
+  const tagText = detail?.tags?.length
+    ? detail.tags.map((tag) => normalizeDynamicTypeLabel(tag, tagOptions, `标签 #${tag}`)).join('、')
+    : '暂无标签'
+  const lastSeenDate = new Date(basicInfo?.lastSeenTime || '')
+  const lastSeenText = basicInfo?.lastSeenTime
+    ? Number.isNaN(lastSeenDate.getTime()) ? basicInfo.lastSeenTime : new Intl.DateTimeFormat('zh-CN', {
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+    }).format(lastSeenDate)
+    : '暂无记录'
   const neuteredInfo = basicInfo?.neutered?.isNeutered ? '已绝育' : '未绝育'
+  const adoptionUnavailableReason = statusText === '毕业' ? getCatAdoptionUnavailableReason(1)
+    : statusText === '喵星' ? getCatAdoptionUnavailableReason(2)
+    : statusText === '领养交接中' ? getCatAdoptionUnavailableReason(4)
+    : statusText === '在校' || statusText === '住院' ? '' : '状态未知，暂不可申请领养'
+  const canAdopt = Boolean(detail && !adoptionUnavailableReason)
   const descriptionText = detail?.description || '暂无档案描述'
 
   const friendliness = toTenScale(attributes?.friendliness)
@@ -486,10 +514,28 @@ export function MobileLayout() {
                   {catName}
                   <HeartFilled className="ml-2 text-[16px] text-[#ff8a80]" />
                 </h1>
+                {detail?.aliases?.length ? <p className="mt-1 break-words text-[13px] text-[#0288d1]">别名：{detail.aliases.join('、')}</p> : null}
                 <p className="mt-1 text-[12px] text-[#999]">{neuteredInfo}</p>
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#fff8e1] text-[22px]">🐱</div>
             </div>
+
+            {(detail?.images?.length ?? 0) > 1 ? (
+              <div aria-label="猫咪相册" className="mb-4 flex gap-2 overflow-x-auto pb-1">
+                {detail?.images?.map((src, index) => (
+                  <button
+                    key={src}
+                    type="button"
+                    aria-label={`查看${catName}照片 ${index + 1}`}
+                    aria-pressed={src === heroImage}
+                    onClick={() => setSelectedImage(src)}
+                    className={`h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 ${src === heroImage ? 'border-[#f7b928]' : 'border-transparent'}`}
+                  >
+                    <img alt={`${catName}照片 ${index + 1}`} src={src} className="h-full w-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            ) : null}
 
             <div className="grid grid-cols-2 gap-2">
               <div className="rounded-2xl bg-[#f8f9fa] p-3">
@@ -499,6 +545,14 @@ export function MobileLayout() {
               <div className="rounded-2xl bg-[#f8f9fa] p-3">
                 <p className="text-[10px] text-[#999]">常驻据点</p>
                 <p className="mt-1 text-[14px] font-bold text-[#333]">{hauntLocationText || '未知'}</p>
+              </div>
+              <div className="min-w-0 rounded-2xl bg-[#f8f9fa] p-3">
+                <p className="text-[10px] text-[#999]">最后看见时间</p>
+                <p className="mt-1 break-words text-[14px] font-bold text-[#333]">{lastSeenText}</p>
+              </div>
+              <div className="min-w-0 rounded-2xl bg-[#f8f9fa] p-3">
+                <p className="text-[10px] text-[#999]">性格特点</p>
+                <p className="mt-1 break-words text-[14px] font-bold text-[#333]">{tagText}</p>
               </div>
             </div>
 
@@ -523,10 +577,47 @@ export function MobileLayout() {
 
         <div className="mt-4 px-5">
           <section className="rounded-[18px] bg-white p-4 shadow-[0_8px_20px_rgba(0,0,0,0.06)]">
+            <h3 className="mb-2 text-[18px] font-bold text-[#111827]">详细信息</h3>
+            <dl className="divide-y divide-[#d1d5db]">
+              {[
+                ['花色', colorText],
+                ['性别', genderText],
+                ['校区', campusText],
+                ['绝育状态', neuteredInfo],
+                ...(basicInfo?.neutered?.neuteredDate ? [['绝育日期', basicInfo.neutered.neuteredDate]] : []),
+                ['健康状况', healthText],
+                ['常驻地', hauntLocationText || '未知'],
+                ['人气值', String(detail?.popularity ?? 0)],
+              ].map(([label, value]) => (
+                <div key={label} className="flex items-start justify-between gap-4 py-3.5 text-[14px]">
+                  <dt className="shrink-0 text-[#4b5563]">{label}</dt>
+                  <dd className="min-w-0 break-words text-right text-[#111827]">{value}</dd>
+                </div>
+              ))}
+            </dl>
+            <Button
+              block
+              className="!mt-4 !h-auto !min-h-[48px] !whitespace-normal !rounded-[16px] !border-none !bg-[#f7b928] !py-3 !text-[16px] !font-bold !text-[#111] active:scale-[0.98] disabled:!bg-[#f3f4f6] disabled:!text-[#9ca3af]"
+              disabled={!canAdopt}
+              onClick={() => {
+                if (!canAdopt) {
+                  message.warning(adoptionUnavailableReason)
+                  return
+                }
+                navigate(`/adopt?catId=${id}`)
+              }}
+            >
+              {adoptionUnavailableReason || '申请领养此猫'}
+            </Button>
+          </section>
+        </div>
+
+        <div className="mt-4 px-5">
+          <section className="rounded-[18px] bg-white p-4 shadow-[0_8px_20px_rgba(0,0,0,0.06)]">
             <h3 className="mb-3 text-[16px] font-bold">喵喵动态</h3>
             {moments.length ? (
               <div className="space-y-3 border-l-2 border-[#eee] pl-4">
-                {moments.slice(0, 3).map((item) => {
+                {moments.map((item) => {
                   const isOwnMoment = Boolean(currentUserId && item.userId && currentUserId === item.userId)
 
                   return (

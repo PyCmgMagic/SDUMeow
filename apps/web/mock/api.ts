@@ -3,7 +3,7 @@
  * （src/pc/types、src/mobile/api/adapters）的数据形状构造的内存后端。
  *
  * 用法：在 apps/web/.env.local 里设置 VITE_MOCK=1 后 `pnpm dev`。
- * - 所有图片为内联 SVG data URL，完全离线可用；
+ * - 示例图片使用内联 SVG data URL，社群二维码使用本地 /qq.jpg，完全离线可用；
  * - /users/login 与 /auth/login（模拟统一认证回调 302）均可用，邮箱含
  *   "admin" 即签发管理员会话；
  * - 数据在内存中可变（封禁、点赞、投喂、公告 CRUD 等都会真实生效），
@@ -245,6 +245,9 @@ interface RouteDef {
 }
 
 const routes: RouteDef[] = [
+  // ---- 社群 ----
+  { method: 'GET', pattern: /^\/community\/group-qrcode$/, handle: () => ({ qrcodeUrl: '/qq.jpg' }) },
+
   // ---- 认证 ----
   { method: 'POST', pattern: /^\/users\/login$/, handle: ({ body }) => {
       const role = String(body?.email || '').includes('admin') ? 'admin' : 'user'
