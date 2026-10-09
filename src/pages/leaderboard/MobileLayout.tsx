@@ -237,12 +237,12 @@ export function MobileLayout() {
             const first = item.rank === 1
             const content = (
               <>
-                <div className="relative mx-auto pt-1">
+                <div className="relative mx-auto w-fit max-w-full pt-1">
                   {first ? <CrownFilled className="absolute -top-5 left-1/2 -translate-x-1/2 text-[22px] text-[#ffd700]" /> : null}
                   <div
                     className={clsx(
-                      'overflow-hidden rounded-full bg-gradient-to-br from-[#d1d5db] to-[#94a3b8]',
-                      first ? 'h-[90px] w-[90px] border-4 border-[#ffd700]' : 'h-[72px] w-[72px] border-4 border-white',
+                      'aspect-square max-w-full overflow-hidden rounded-full bg-gradient-to-br from-[#d1d5db] to-[#94a3b8]',
+                      first ? 'w-[90px] border-4 border-[#ffd700]' : 'w-[72px] border-4 border-white',
                     )}
                   >
                     {item.avatar ? <img alt={item.name} className="h-full w-full object-cover" src={item.avatar} /> : null}
@@ -256,18 +256,18 @@ export function MobileLayout() {
                     {item.rank}
                   </div>
                 </div>
-                <p className={clsx('mt-2 font-bold text-[#333]', first ? 'text-[15px]' : 'text-[13px]')}>{item.name}</p>
-                <p className="text-[11px] text-[#7f8c8d]">{item.campus}</p>
-                <p className={clsx('text-[11px]', first ? 'font-semibold text-[#ffa000]' : 'text-[#999]')}>{item.feedCount} {tab.unit}</p>
+                <p title={item.name} className={clsx('mt-2 line-clamp-2 h-11 break-words font-bold leading-[22px] text-[#333]', first ? 'text-[15px]' : 'text-[13px]')}>{item.name}</p>
+                <p title={item.campus} className="truncate text-[11px] text-[#7f8c8d]">{item.campus}</p>
+                <p title={`${item.feedCount} ${tab.unit}`} className={clsx('truncate text-[11px]', first ? 'font-semibold text-[#ffa000]' : 'text-[#999]')}>{item.feedCount} {tab.unit}</p>
               </>
             )
 
             return item.catId ? (
-              <Link key={item.catId} className={clsx('text-center', first && '-translate-y-4')} to={`/cats/${item.catId}`}>
+              <Link key={item.catId} className={clsx('min-w-0 flex-1 text-center', first && '-translate-y-4')} to={`/cats/${item.catId}`}>
                 {content}
               </Link>
             ) : (
-              <div key={`${item.name}-${item.rank}`} className={clsx('text-center', first && '-translate-y-4')}>
+              <div key={`${item.name}-${item.rank}`} className={clsx('min-w-0 flex-1 text-center', first && '-translate-y-4')}>
                 {content}
               </div>
             )
@@ -278,15 +278,15 @@ export function MobileLayout() {
           {followRanks.map((item) => {
             const rowContent = (
               <>
-                <div className="w-8 text-center text-[16px] font-bold text-[#ccc]">{item.rank}</div>
-                <div className="mr-3 h-10 w-10 overflow-hidden rounded-full bg-gradient-to-br from-[#d1d5db] to-[#94a3b8]">
+                <div className="w-8 shrink-0 text-center text-[16px] font-bold text-[#ccc]">{item.rank}</div>
+                <div className="mr-3 h-10 w-10 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-[#d1d5db] to-[#94a3b8]">
                   {item.avatar ? <img alt={item.name} className="h-full w-full object-cover" src={item.avatar} /> : null}
                 </div>
-                <div className="flex-1">
-                  <p className="text-[14px] font-semibold text-[#333]">{item.name}</p>
-                  <p className="text-[11px] text-[#999]">常驻：{item.campus}</p>
+                <div className="min-w-0 flex-1">
+                  <p title={item.name} className="line-clamp-2 break-words text-[14px] font-semibold text-[#333]">{item.name}</p>
+                  <p title={`常驻：${item.campus}`} className="truncate text-[11px] text-[#999]">常驻：{item.campus}</p>
                 </div>
-                <span className="text-[14px] font-semibold text-[#555]">{item.feedCount} {tab.unit}</span>
+                <span className="ml-2 shrink-0 whitespace-nowrap text-[14px] font-semibold text-[#555]">{item.feedCount} {tab.unit}</span>
               </>
             )
 
