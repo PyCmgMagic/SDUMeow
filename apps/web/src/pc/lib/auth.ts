@@ -13,7 +13,7 @@ import { getJwtPayload } from '@shared/jwt'
 const AUTH_ORIGIN = (
   import.meta.env.VITE_AUTH_ORIGIN ||
   import.meta.env.VITE_API_PROXY_TARGET ||
-  'https://meow.sduonline.cn'
+  (typeof window === 'undefined' ? '' : window.location.origin)
 ).replace(/\/+$/, '')
 
 // Apifox documents authentication below the API base path, while the CAS

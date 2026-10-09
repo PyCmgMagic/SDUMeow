@@ -37,7 +37,7 @@ function spaFallback(): Plugin {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const apiProxyTarget = env.VITE_API_PROXY_TARGET || 'https://meow.sduonline.cn'
+  const apiProxyTarget = env.VITE_API_PROXY_TARGET?.trim()
 
   return {
     base: '/',
@@ -57,15 +57,16 @@ export default defineConfig(({ mode }) => {
     server: {
       strictPort: true,
       port: 5173,
-      proxy: {
-        '/api': {
-          target: apiProxyTarget,
-          changeOrigin: true,
-          secure: false,
-          // The deployed backend is served below /api. Preserve the prefix so
-          // /api/users/login is not rewritten to the frontend SPA fallback.
-        },
-      },
+      proxy: apiProxyTarget
+        ? {
+            '/api': {
+              target: apiProxyTarget,
+              changeOrigin: true,
+              secure: false,
+              // Preserve /api when forwarding requests to the configured backend.
+            },
+          }
+        : undefined,
     },
     build: {
       outDir: fileURLToPath(new URL('../../dist', import.meta.url)),

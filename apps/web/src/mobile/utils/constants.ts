@@ -1,10 +1,10 @@
 export const APP_NAME = 'SDU Meow'
 
 export const DEFAULT_FRONTEND_BASE_URL =
-  'https://meow.sduonline.cn'
+  typeof window === 'undefined' ? '' : window.location.origin
 
 export const DEFAULT_API_BASE_URL =
-  `${DEFAULT_FRONTEND_BASE_URL}/api`
+  '/api'
 
 export const STORAGE_KEYS = {
   token: 'sdu_meow_token',

@@ -40,7 +40,7 @@ pnpm dev
 
 ```dotenv
 # 开发服务器将 /api 请求代理到此地址，并保留 /api 前缀。
-VITE_API_PROXY_TARGET=https://meow.sduonline.cn
+VITE_API_PROXY_TARGET=
 
 # 移动端使用当前站点的 /api 接口。
 VITE_API_BASE_URL=/api
@@ -48,13 +48,13 @@ VITE_API_BASE_URL=/api
 
 | 变量 | 用途 |
 | --- | --- |
-| `VITE_API_PROXY_TARGET` | 开发时的 API 代理目标，默认 `https://meow.sduonline.cn`；也作为 PC 统一认证地址的回退值。 |
-| `VITE_API_BASE_URL` | 移动端 API 与统一认证基地址；可设为 `/api` 或完整 API 地址。未配置时使用线上 API。 |
-| `VITE_AUTH_ORIGIN` | PC 统一认证服务地址；未配置时使用代理目标或默认线上地址。 |
+| `VITE_API_PROXY_TARGET` | 开发时的 API 代理目标，需要在本地配置中填写；为空时不启用开发代理。也作为 PC 统一认证地址的回退值。 |
+| `VITE_API_BASE_URL` | 移动端 API 与统一认证基地址；可设为 `/api` 或完整 API 地址，默认 `/api`。 |
+| `VITE_AUTH_ORIGIN` | PC 统一认证服务地址；未配置时使用代理目标或当前站点。 |
 | `VITE_IMAGE_BASE_URL` | 移动端图片资源基地址，可选。 |
-| `VITE_FRONTEND_BASE_URL` | 移动端分享链接的站点基地址，可选；未配置时使用线上站点。 |
+| `VITE_FRONTEND_BASE_URL` | 移动端分享链接的站点基地址，可选；未配置时使用当前站点。 |
 
-PC 业务请求固定使用同源 `/api`，`VITE_API_BASE_URL` 仅影响移动端。部署时需为 PC 配置对应的 `/api` 服务或反向代理。
+将实际后端地址填写在被 Git 忽略的 `.env.local` 或 `.env.production` 中。PC 业务请求固定使用同源 `/api`，`VITE_API_BASE_URL` 仅影响移动端。部署时需为 PC 配置对应的 `/api` 服务或反向代理。
 
 `VITE_*` 变量会写入前端构建产物，请只填写公开配置。修改环境变量后需重启开发服务或重新构建。
 
