@@ -8,6 +8,10 @@ dist
 dist-ssr
 coverage
 *.local
+.local-dev-backup/
+apps/web/mock/
+apps/web/tests/
+apps/web/vite.config.local.ts
 
 # Local source checkouts used while importing the original repositories
 .sources

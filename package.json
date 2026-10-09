@@ -8,7 +8,6 @@
     "build": "pnpm clean && pnpm --filter @sdumeow/web build",
     "typecheck": "pnpm --filter @sdumeow/web typecheck",
     "lint": "pnpm --filter @sdumeow/web lint",
-    "test": "pnpm --filter @sdumeow/web test:run",
     "preview": "pnpm --filter @sdumeow/web preview",
     "clean": "node scripts/clean-dist.mjs"
   }

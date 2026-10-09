@@ -15,8 +15,7 @@ export function DesktopLayout() {
   const [sduLoading, setSduLoading] = useState(false)
   const [passwordLoading, setPasswordLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const isMock = import.meta.env.VITE_MOCK === '1'
-  const [form, setForm] = useState({ email: isMock ? 'user@sdumeow.cn' : '', password: isMock ? 'meow123' : '' })
+  const [form, setForm] = useState({ email: '', password: '' })
   const login = useUserStore((state) => state.login)
 
   const { authNotice, dismissAuthNotice } = useAuthQueryFeedback({
@@ -101,9 +100,6 @@ export function DesktopLayout() {
           </Button>
 
           <div className="auth-divider">邮箱密码登录</div>
-          {isMock ? (
-            <p className="mb-4 text-center text-sm leading-6 text-gray-500">演示账号已填好：user@sdumeow.cn / meow123</p>
-          ) : null}
           <form
             className="auth-form-fields"
             onSubmit={(event) => {

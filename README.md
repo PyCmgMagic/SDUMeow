@@ -43,15 +43,6 @@ pnpm install
 pnpm dev          # http://localhost:5173/  （单端口单入口，改窗口宽度即可切换两端界面）
 ```
 
-### 本地 Mock 模式（无需真实账号）
-
-`apps/web/.env.local` 中设置 `VITE_MOCK=1` 后，dev server 会启用 `mock/api.ts` —— 一个依据《接口文件.openapi.yaml》契约构造的内存后端：
-
-- **登录**：桌面端点"山东大学统一认证"或邮箱密码登录均可；**邮箱含 `admin` 即为管理员**（如 `admin@sdumeow.cn`）；移动端登录后与桌面端共享会话
-- **数据**：内存可变（投喂、点赞、封禁、公告 CRUD 均真实生效），重启 dev server 复位
-- **图片**：内联 SVG，完全离线可用
-- 关闭 Mock（`VITE_MOCK=0` 或删除变量）即恢复 `/api` → 线上的 Vite 代理
-
 ### 线上 API 代理
 
 如需联调真实后端，在 `apps/web` 下创建 `.env.local`（参考 `apps/web/.env.example`）：
@@ -65,7 +56,6 @@ VITE_API_PROXY_TARGET=https://meow.sduonline.cn
 ```bash
 pnpm typecheck
 pnpm lint
-pnpm test
 pnpm build
 ```
 

@@ -2,7 +2,6 @@ import react from '@vitejs/plugin-react'
 import { fileURLToPath, URL } from 'node:url'
 import { loadEnv } from 'vite'
 import { defineConfig, type Plugin } from 'vite'
-import { mockApiPlugin } from './mock/api'
 
 // 单一 SPA 入口：一套规范路由同时服务桌面端与移动端（按视口宽度渲染对应变体）。
 // 旧的 /pc/*、/mobile/* 前缀 URL 由路由表内的重定向规则兼容。
@@ -45,7 +44,7 @@ export default defineConfig(({ mode }) => {
     // 'mpa' 关闭 Vite 内置的 SPA 回退（它会把 404 也重写到 index.html），
     // 由上面的 spaFallback 中间件全权负责。
     appType: 'mpa',
-    plugins: [react(), spaFallback(), ...(env.VITE_MOCK === '1' ? [mockApiPlugin()] : [])],
+    plugins: [react(), spaFallback()],
     resolve: {
       alias: {
         // `@` keeps pointing at the mobile subtree so the imported mobile app
@@ -84,18 +83,6 @@ export default defineConfig(({ mode }) => {
             'vendor-ui': ['lucide-react', 'sonner'],
           },
         },
-      },
-    },
-    test: {
-      environment: 'jsdom',
-      setupFiles: ['./tests/setup.ts'],
-      coverage: {
-        provider: 'v8',
-        reporter: ['text', 'html'],
-        // Include the unified app instead of only the mobile API/store subset.
-        // This keeps the report honest about shared, desktop and route code.
-        include: ['src/**/*.{ts,tsx}'],
-        exclude: ['src/**/*.d.ts', 'src/**/assets/**'],
       },
     },
   }

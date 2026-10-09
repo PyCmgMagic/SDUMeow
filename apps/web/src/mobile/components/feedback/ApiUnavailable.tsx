@@ -13,7 +13,7 @@ export function ApiUnavailable({ title = '当前页面接口暂不可用', onRet
       message={title}
       description={
         <Space direction="vertical" size={8}>
-          <span>云端 Mock 当前返回 404，页面保留高保真设计态，可稍后重试。</span>
+          <span>暂时无法加载数据，请稍后重试。</span>
           {onRetry ? <Button onClick={onRetry}>重试</Button> : null}
         </Space>
       }

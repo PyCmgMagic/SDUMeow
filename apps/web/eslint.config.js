@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'coverage']),
+  globalIgnores(['dist', 'coverage', 'mock', 'tests', 'vite.config.local.ts']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -34,15 +34,6 @@ export default defineConfig([
       // so unmount cleanups (object URL revoke, timers, request guards) read
       // the latest values, matching the former app's live-ref semantics.
       'react-hooks/refs': 'off',
-    },
-  },
-  {
-    files: ['tests/**/*.ts', 'tests/**/*.tsx'],
-    languageOptions: {
-      globals: {
-        ...globals.browser,
-        ...globals.node,
-      },
     },
   },
 ])
