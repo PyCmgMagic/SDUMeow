@@ -5,6 +5,7 @@ import { RequireRole } from '@/router/guards'
 import { useAuth } from '@/hooks/useAuth'
 import { UserRole } from '@/types/enums'
 import { hasValidSession, isTokenExpired } from '@/utils/session'
+import { useSessionReady } from '@shared/useSessionReady'
 
 import { MobileHomePage } from './MobileHomePage'
 
@@ -17,8 +18,9 @@ const userAccessibleRoles = [UserRole.User, UserRole.Guest]
  */
 export function MobileLayout() {
   const { role, token, hydrated } = useAuth()
+  const sessionReady = useSessionReady()
 
-  if (!hydrated) {
+  if (!hydrated || (token && !sessionReady)) {
     return null
   }
 

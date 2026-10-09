@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { catApi, postApi, typeApi } from '@pc/lib/api';
 import { getAccessToken } from '@pc/lib/auth'
+import { useAuthStore } from '@shared/auth.store'
+import { queryClient } from '@shared/queryClient'
 import { getCatAdoptionUnavailableReason, isCatAdoptable } from '@pc/lib/cat'
 import { MomentCard } from '@pc/components/MomentCard';
 import { Button } from '@pc/components/ui/button';
@@ -189,6 +191,8 @@ const handleFeed = async () => {
     setFeedLoading(true)
     try {
         const res = await catApi.feedCat(catId)
+        await useAuthStore.getState().fetchUserInfo()
+        void queryClient.invalidateQueries({ queryKey: ['me'] })
         toast.success(`投喂成功！剩余猫粮: ${res?.userCurrency ?? '--'}`)
     } catch (error) {
         const msg = error instanceof Error ? error.message : '投喂失败'

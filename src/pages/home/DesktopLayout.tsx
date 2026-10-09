@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@pc/components/ui/button';
 import { catApi, typeApi, userApi } from '@pc/lib/api';
 import { useUserStore } from '@pc/stores/user';
-import type { CatListItem, CheckinResult, TypeOption } from '@pc/types';
+import type { Campus, CatListItem, CheckinResult, TypeOption } from '@pc/types';
 import { toast } from '@pc/lib/toast'
 import {
   Pagination,
@@ -16,6 +16,9 @@ import {
 import { ChevronLeft, ChevronRight, Gift, Calendar, Zap } from 'lucide-react';
 import { withoutAppBasePath } from '@pc/lib/appPath'
 import { cn } from '@pc/lib/utils'
+import { campusOptions } from '@shared/campus.store'
+import { useHomeFilters } from '@shared/useHomeFilters'
+import { queryClient } from '@shared/queryClient'
 
 import { StatsBanner } from '@pc/components/StatsBanner';
 import { ShortcutGrid } from '@pc/components/ShortcutGrid';
@@ -34,6 +37,7 @@ const latestRequestId = useRef(0)
 
 const location = useLocation()
 const navigate = useNavigate()
+const filters = useHomeFilters()
 
 // 签到相关
 const [checkinLoading, setCheckinLoading] = useState(false)
@@ -56,6 +60,7 @@ const handleCheckin = async () => {
       toast.success(`签到成功！获得 ${res?.rewards?.currency || 0} 小鱼干，${res?.rewards?.experience || 0} 经验值`)
       // 刷新用户信息以更新小鱼干余额
       useUserStore.getState().fetchUserInfo()
+      void queryClient.invalidateQueries({ queryKey: ['me'] })
     }
   } catch (error) {
     toast.error(error instanceof Error ? error.message : '签到失败，请稍后重试')
@@ -83,7 +88,7 @@ const setCurrentPage = (val: number) => {
 }
 
 const colorValue = Number(colorParam)
-const selectedColor = Number.isInteger(colorValue) && colorValue > 0 ? colorValue : null
+const selectedColor = colorParam !== null && colorParam !== '' && Number.isInteger(colorValue) && colorValue >= 0 ? colorValue : null
 
 const colorLabels = new Map(colorOptions.map((item) => [item.id, item.label]))
 const colorLabel = (colorId: number) => colorLabels.get(colorId) || `花色 #${colorId}`
@@ -131,6 +136,7 @@ const fetchCats = async () => {
     const data = await catApi.getCatList({
       page: currentPage,
       pageSize,
+      campus: Number(filters.campus) as Campus,
       ...(selectedColor !== null && { color: selectedColor }),
       ...(search && { search })
     })
@@ -169,7 +175,7 @@ const loadColorOptions = async () => {
 useEffect(() => {
   void fetchCats()
 // eslint-disable-next-line react-hooks/exhaustive-deps -- 意图为仅挂载执行 / 模拟 Vue watch
-}, [pageParam, searchParam, colorParam])
+}, [pageParam, searchParam, colorParam, filters.campus])
 
 useEffect(() => {
   void loadColorOptions()
@@ -242,6 +248,12 @@ return (
     </div>
 
     <section className="flex min-w-0 flex-col gap-6">
+      <label className="flex items-center gap-3 text-sm">
+        校区
+        <select className="rounded-lg border border-gray-200 bg-white px-3 py-2" value={filters.campus} onChange={(event) => filters.setCampus(event.target.value)}>
+          {campusOptions.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}
+        </select>
+      </label>
       <div className="flex flex-wrap gap-3">
         <Button onClick={() => selectColor(null)}
           className={cn('px-3 py-1 border-2 rounded-full text-sm', selectedColor === null ? 'bg-primary text-black border-primary' : 'bg-white text-black border-gray-200 hover:bg-primary')}>
@@ -289,18 +301,13 @@ return (
                 page === '...' ? (
                   <PaginationEllipsis key={index} className="px-3 text-gray-400" />
                 ) : (
-                  <PaginationItem key={index} value={page as number}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className={cn(
+                  <PaginationItem key={index} value={page as number}
+                    className={cn(
                         'h-9 w-9 rounded-md',
                         currentPage === page ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'hover:bg-gray-50'
-                      )}
-                      onClick={() => setCurrentPage(page as number)}
-                    >
-                      {page}
-                    </Button>
+                    )}
+                    onClick={() => setCurrentPage(page as number)}>
+                    {page}
                   </PaginationItem>
                 )
               ))}

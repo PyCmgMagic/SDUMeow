@@ -8,7 +8,7 @@ import {
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, Form, Input, Select, message } from 'antd'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import type { ChangeEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
@@ -17,6 +17,7 @@ import { uploadImages } from '@/api/endpoints/cos'
 import { getCats } from '@/api/endpoints/cats'
 import { publishMoment } from '@/api/endpoints/moments'
 import { usePageTitle } from '@/hooks/usePageTitle'
+import { clearDraft, readDraft, useAntdDraft, useDraftMedia } from '@shared/drafts'
 
 type PublishForm = {
   content: string
@@ -53,7 +54,11 @@ export function MobileLayout() {
   const [form] = Form.useForm<PublishForm>()
   const catIdFromQuery = searchParams.get('catId')?.trim() ?? ''
 
-  const [mediaList, setMediaList] = useState<LocalMediaItem[]>([])
+  const [mediaList, setMediaList] = useDraftMedia('publish')
+  useAntdDraft('publish', form,
+    (values) => ({ content: String(values.content || ''), relatedCatIds: String(values.catId || ''), location: String(values.location || '') }),
+    (values) => ({ content: values.content, catId: values.relatedCatIds, location: values.location }),
+  )
   const albumInputRef = useRef<HTMLInputElement | null>(null)
   const cameraInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -118,8 +123,12 @@ export function MobileLayout() {
   const mutation = useMutation({
     mutationFn: async (values: PublishForm) => {
       const media = mediaList.length > 0 ? await uploadImages(mediaList.map((item) => item.file)) : undefined
+      const draft = readDraft('publish').values
+      let content = values.content.trim()
+      if (draft.title) content = `【${draft.title}】\n${content}`.trim()
+      if (Array.isArray(draft.tags) && draft.tags.length) content = `${content}\n${draft.tags.map((tag) => `#${tag}`).join(' ')}`.trim()
       return publishMoment({
-        content: values.content.trim(),
+        content,
         relatedCatIds: values.relatedCatIds,
         location: values.location?.trim() || undefined,
         media,
@@ -127,6 +136,7 @@ export function MobileLayout() {
     },
     onSuccess: async (_, values) => {
       message.success('发布成功')
+      clearDraft('publish')
       setMediaList([])
       form.resetFields(['content', 'location'])
 

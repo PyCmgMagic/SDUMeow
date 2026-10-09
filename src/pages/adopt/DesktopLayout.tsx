@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentType } from 'react'
+import { useEffect, useRef, useState, type ComponentType } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 import { catApi, typeApi } from '@pc/lib/api'
@@ -20,6 +20,7 @@ import { Input } from '@pc/components/ui/input'
 import { Textarea } from '@pc/components/ui/textarea'
 import { CatPickerDialog } from '@pc/components/CatPickerDialog'
 import { ArrowLeft, Building2, CheckCircle2, ChevronRight, HeartHandshake, Home, MessageCircle, PawPrint, Phone, School, Sprout, Users } from 'lucide-react'
+import { clearDraft, readDraft, useDraftSnapshot } from '@shared/drafts'
 
 const housingOptions: Array<{ id: AdoptionHousing; label: string; icon: ComponentType<{ className?: string }> }> = [
   { id: 'OWN_HOUSE', label: AdoptionHousingMap.OWN_HOUSE, icon: Home },
@@ -59,8 +60,10 @@ export function DesktopLayout() {
       plan: '',
       phone: '',
       wechat: '',
-      agreement: false
+      agreement: false,
+      ...readDraft('adopt').values,
     })
+  useDraftSnapshot('adopt', { ...form, ...(targetCat ? { catId: String(targetCat.id) } : {}) })
 
   const colorLabels = new Map(colorOptions.map((item) => [item.id, item.label]))
 
@@ -127,6 +130,7 @@ export function DesktopLayout() {
         }
       };
       await catApi.submitAdoption(payload);
+      clearDraft('adopt')
       navigate('/my-adoptions')
     }
     catch (error) { toast.error(error instanceof Error ? error.message : '领养申请提交失败，请稍后重试') }
@@ -135,10 +139,13 @@ export function DesktopLayout() {
 
   // route.query.catId（string | null）
   const catIdQuery = new URLSearchParams(location.search).get('catId')
+  const catSelectionInitialized = useRef(false)
 
   // 挂载时与 catId 变化时重新加载目标猫咪（对应 onMounted + watch）
   useEffect(() => {
-    void fetchTargetCat(catIdQuery ?? '');
+    const selectedId = catSelectionInitialized.current ? catIdQuery : String(readDraft('adopt').values.catId || '') || catIdQuery
+    catSelectionInitialized.current = true
+    void fetchTargetCat(selectedId || '');
   }, [catIdQuery])
 
   useEffect(() => {

@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { UserRole, type UserRole as UserRoleType } from '@/types/enums'
 import { hasValidSession } from '@/utils/session'
 import { storage } from '@/utils/storage'
+import { useSessionReady } from '@shared/useSessionReady'
 
 type RequireRoleProps = PropsWithChildren<{
   allow: UserRoleType[]
@@ -26,13 +27,14 @@ function canAccess(role: UserRoleType, allow: UserRoleType[]): boolean {
 
 export function RequireRole({ allow, children }: RequireRoleProps) {
   const { role, token, hydrated } = useAuth()
+  const sessionReady = useSessionReady()
   const location = useLocation()
   const loginState = {
     from: `${location.pathname}${location.search}`,
     loginNotice: '请登录使用功能',
   }
 
-  if (!hydrated) {
+  if (!hydrated || (token && !sessionReady)) {
     return null
   }
 

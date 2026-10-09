@@ -1,7 +1,11 @@
 import { create } from 'zustand'
 import type { UserProfile } from '@/types/domain'
 import { UserRole } from '@/types/enums'
-import { readRefreshToken, subscribeSession, writeSession } from '@shared/session'
+import { getSessionRevision, readRefreshToken, subscribeSession, writeSession } from '@shared/session'
+import { isJwtExpired } from '@shared/jwt'
+import { refreshSession } from '@shared/refresh'
+import { queryClient } from '@shared/queryClient'
+import { clearDrafts } from '@shared/drafts'
 import { adminAuthApi, statsApi, userApi } from '@pc/lib/api'
 import { isHttpRequestError, resetSessionExpiryHandling } from '@pc/lib/https'
 import {
@@ -40,6 +44,8 @@ interface UserStore {
   role: UserRole | null
   profile: UserProfile | null
   hydrated: boolean
+  authRevision: number
+  ensureSession: () => Promise<boolean>
   acceptSession: (payload: { token: string; role: UserRole; profile?: UserProfile | null }) => void
   enterGuest: () => void
   logoutActive: () => void
@@ -67,6 +73,8 @@ let restorePromise: Promise<boolean> | null = null
 let restoreVersion = -1
 let userSessionVersion = 0
 let adminCheckPromise: Promise<AdminAccessResult> | null = null
+let adminCheckRevision = -1
+let adminCheckScope: 'user' | 'admin' | null = null
 
 const GUEST_KEY = 'meow.session.guest'
 
@@ -88,13 +96,13 @@ export const useAuthStore = create<UserStore>()((set, get) => {
     userSessionVersion += 1
     saveAuthTokens({ accessToken, refreshToken })
     resetSessionExpiryHandling()
-    set({ token: accessToken, role: UserRole.User, profile: null, userInfo: null })
+    set({ token: accessToken, role: UserRole.User, profile: null, userInfo: null, authRevision: get().authRevision + 1 })
   }
 
   const persistAdminTokens = (accessToken: string, refreshToken?: string) => {
     saveAdminAuthTokens({ accessToken, refreshToken })
     resetSessionExpiryHandling()
-    set({ adminToken: accessToken, role: UserRole.Admin, profile: null })
+    set({ adminToken: accessToken, role: UserRole.Admin, profile: null, authRevision: get().authRevision + 1 })
   }
 
   const fetchUserInfo = async () => {
@@ -164,6 +172,25 @@ export const useAuthStore = create<UserStore>()((set, get) => {
       readGuestMode() ? UserRole.Guest : null,
     profile: null,
     hydrated: true,
+    authRevision: 0,
+    ensureSession: async () => {
+      if (get().role === UserRole.Guest) return true
+      const scope = get().role === UserRole.Admin ? 'admin' : 'user'
+      const token = scope === 'admin' ? get().adminToken : get().token
+      if (!token) return false
+      if (!isJwtExpired(token)) return true
+      const revision = getSessionRevision(scope)
+      try {
+        await refreshSession(scope)
+        return true
+      } catch {
+        if (revision !== getSessionRevision(scope)) return false
+        if ((scope === 'admin' ? get().adminToken : get().token) !== token) return false
+        if (scope === 'admin') adminLogout()
+        else logout()
+        return false
+      }
+    },
     acceptSession: ({ token, role, profile = null }) => {
       if (role === UserRole.Guest) throw new Error('游客模式不能接入登录会话')
       const scope = role === UserRole.Admin ? 'admin' : 'user'
@@ -174,7 +201,7 @@ export const useAuthStore = create<UserStore>()((set, get) => {
       localStorage.removeItem(GUEST_KEY)
       localStorage.removeItem('sdu_meow_auth')
       resetSessionExpiryHandling()
-      set({ role, profile, userInfo: null, isSessionResolved: scope === 'admin' })
+      set({ role, profile, userInfo: null, isSessionResolved: scope === 'admin', authRevision: get().authRevision + 1 })
     },
     enterGuest: () => {
       logout()
@@ -249,6 +276,7 @@ export const useAuthStore = create<UserStore>()((set, get) => {
     },
 
     restoreSession: async () => {
+      if (!await get().ensureSession()) return false
       set({ token: getAccessToken() })
       if (!get().token) {
         set({
@@ -296,13 +324,19 @@ export const useAuthStore = create<UserStore>()((set, get) => {
       }
       if (adminAccess === 'denied') return 'denied'
 
-      if (!adminCheckPromise) {
+      const scope = adminToken ? 'admin' : 'user'
+      const revision = getSessionRevision(scope)
+      if (!adminCheckPromise || adminCheckRevision !== revision || adminCheckScope !== scope) {
+        adminCheckRevision = revision
+        adminCheckScope = scope
         adminCheckPromise = statsApi.getAdminDashboardStats({ silent: true })
           .then(() => {
+            if (getSessionRevision(scope) !== revision) return 'expired' as const
             set({ adminAccess: 'allowed' })
             return 'allowed' as const
           })
           .catch((error: unknown) => {
+            if (getSessionRevision(scope) !== revision) return 'expired' as const
             if (isHttpRequestError(error)) {
               if (error.status === 401 || error.responseCode === 401) {
                 if (get().adminToken) adminLogout()
@@ -326,7 +360,7 @@ export const useAuthStore = create<UserStore>()((set, get) => {
             return 'unavailable' as const
           })
           .finally(() => {
-            adminCheckPromise = null
+            if (adminCheckRevision === revision && adminCheckScope === scope) adminCheckPromise = null
           })
       }
 
@@ -357,12 +391,15 @@ export const useAuthStore = create<UserStore>()((set, get) => {
 
 // Token writes from either HTTP client (including refresh and expiry) update
 // this same store synchronously, before a newly mounted layout runs its guard.
+const sessionRevisions = { user: getSessionRevision('user'), admin: getSessionRevision('admin') }
 subscribeSession((scope, accessToken, source) => {
   const state = useAuthStore.getState()
   const role = scope === 'admin' ? UserRole.Admin : UserRole.User
   const previousToken = scope === 'admin' ? state.adminToken : state.token
-  const externalChange = source === 'storage' && previousToken !== accessToken
-  if (scope === 'user' && (!accessToken || externalChange)) userSessionVersion += 1
+  const identityChanged = sessionRevisions[scope] !== getSessionRevision(scope)
+  const externalChange = source === 'storage' && identityChanged
+  sessionRevisions[scope] = getSessionRevision(scope)
+  if (scope === 'user' && identityChanged) userSessionVersion += 1
   const activate = accessToken && (!previousToken || state.role === role || !state.role || state.role === UserRole.Guest)
   if (accessToken) {
     localStorage.removeItem(GUEST_KEY)
@@ -371,7 +408,8 @@ subscribeSession((scope, accessToken, source) => {
   useAuthStore.setState({
     ...(scope === 'admin' ? { adminToken: accessToken } : { token: accessToken }),
     ...(activate ? { role } : !accessToken && state.role === role ? { role: null, profile: null } : {}),
-    ...(accessToken && (externalChange || (activate && state.role !== role)) ? {
+    ...(!accessToken || identityChanged || externalChange || !previousToken ? { authRevision: state.authRevision + 1 } : {}),
+    ...(accessToken && (identityChanged || externalChange || (activate && state.role !== role)) ? {
       profile: null,
       ...(scope === 'user' ? { userInfo: null, isSessionResolved: false } : {}),
       adminAccess: 'unknown',
@@ -379,4 +417,16 @@ subscribeSession((scope, accessToken, source) => {
     ...(!accessToken && scope === 'user' ? { userInfo: null, isSessionResolved: true } : {}),
     ...(!accessToken ? { adminAccess: 'unknown' } : {}),
   })
+})
+
+useAuthStore.subscribe((state, previous) => {
+  if (state.authRevision === previous.authRevision && state.role === previous.role) return
+  // Cancel first so a late response cannot put the previous account back into
+  // the cache. Layout consumers will refetch after the session change.
+  void queryClient.cancelQueries()
+  queryClient.clear()
+  clearDrafts()
+  for (const key of ['user:auto-checkin:total-days', 'user:auto-checkin:continuous-days', 'admin:me:avatar']) {
+    localStorage.removeItem(key)
+  }
 })

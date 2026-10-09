@@ -5,6 +5,7 @@ import {
   redirect,
   type LoaderFunctionArgs,
   type RouteObject,
+  useLocation,
 } from 'react-router-dom'
 
 import { AdminLayout as PcAdminLayout } from '@pc/components/layout/AdminLayout'
@@ -420,10 +421,14 @@ export const router = createBrowserRouter(
 /** 统一根：桌面端渲染 PC 壳（侧栏+顶栏），移动端渲染移动端根布局。 */
 function UnifiedRoot() {
   const isMobile = useIsMobile()
+  const authRevision = useUserStore((state) => state.authRevision)
+  const location = useLocation()
+  const params = new URLSearchParams(location.search)
+  const key = params.has('meow_token') || params.has('login_code') ? 'auth-callback' : authRevision
 
   useEffect(() => {
     document.documentElement.dataset.device = isMobile ? 'mobile' : 'pc'
   }, [isMobile])
 
-  return isMobile ? <AppRootLayout /> : <PcApp />
+  return isMobile ? <AppRootLayout key={key} /> : <PcApp key={key} />
 }

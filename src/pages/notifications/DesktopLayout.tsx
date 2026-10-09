@@ -284,7 +284,7 @@ return (
       </header>
 
       <div className="mb-6 overflow-x-auto border-2 border-black bg-white p-3 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-        <div className="flex min-w-max gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:min-w-max">
           {tabs.map((tab) => {
             const TabIcon = tab.icon
             return (
@@ -292,14 +292,14 @@ return (
                 key={tab.value}
                 type="button"
                 className={cn(
-                  'flex h-10 items-center gap-2 border-2 px-4 text-sm font-bold transition-colors',
+                  'flex h-10 min-w-0 items-center justify-center gap-2 border-2 px-2 text-sm font-bold transition-colors sm:px-4',
                   activeTab === tab.value
                     ? 'border-black bg-[#5CD6C2] text-black shadow-[2px_2px_0px_rgba(0,0,0,1)]'
                     : 'border-transparent bg-gray-100 text-gray-600 hover:border-black hover:bg-[#DDF8F2]',
                 )}
                 onClick={() => setActiveTab(tab.value)}
               >
-                <TabIcon className="h-4 w-4" />
+                <TabIcon className="h-4 w-4 shrink-0" />
                 {tab.label}
                 <span className="border border-black/20 bg-white/70 px-1.5 text-xs text-gray-700">
                   {tabCount(tab.value) > 99 ? '99+' : tabCount(tab.value)}

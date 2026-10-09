@@ -12,6 +12,7 @@ import { getColors, getLocations, getTags } from '@/api/endpoints/types'
 import { ApiUnavailable } from '@/components/feedback/ApiUnavailable'
 import { QueryState } from '@/components/feedback/QueryState'
 import { usePageTitle } from '@/hooks/usePageTitle'
+import { clearDraft, useAntdDraft, useDraftMedia } from '@shared/drafts'
 
 const campusOptions: Array<{ label: string; value: number }> = [
   { label: '中心校区', value: 0 },
@@ -30,12 +31,6 @@ type NewCatForm = {
   campus: number
   location: number
   traits?: number[]
-}
-
-type LocalImageItem = {
-  id: string
-  file: File
-  dataUrl: string
 }
 
 const defaultAttributeScore = {
@@ -98,7 +93,17 @@ export function MobileLayout() {
   const [form] = Form.useForm<NewCatForm>()
   const albumInputRef = useRef<HTMLInputElement | null>(null)
   const cameraInputRef = useRef<HTMLInputElement | null>(null)
-  const [selectedImages, setSelectedImages] = useState<LocalImageItem[]>([])
+  const [selectedImages, setSelectedImages] = useDraftMedia('new-cat')
+  useAntdDraft('new-cat', form,
+    (values) => ({
+      tempName: String(values.tempName || ''),
+      color: values.color === '' || values.color === undefined ? undefined : Number(values.color),
+      campus: values.campus === '' || values.campus === undefined ? undefined : Number(values.campus),
+      location: values.location ? Number(values.location) : undefined,
+      traits: values.tags as number[] | undefined,
+    }),
+    (values) => ({ tempName: values.tempName, color: String(values.color ?? ''), campus: String(values.campus ?? ''), location: String(values.location ?? ''), tags: values.traits }),
+  )
   const [successModalOpen, setSuccessModalOpen] = useState(false)
   const currentColor = Form.useWatch('color', form)
   const currentLocation = Form.useWatch('location', form)
@@ -131,6 +136,7 @@ export function MobileLayout() {
       return createNewCat(toNewCatPayload(values, images))
     },
     onSuccess: () => {
+      clearDraft('new-cat')
       setSuccessModalOpen(true)
     },
     onError: (error) => message.error(error instanceof Error ? error.message : '提交失败'),
@@ -157,8 +163,8 @@ export function MobileLayout() {
 
       const dataUrl = await toDataUrl(file)
       setSelectedImages((prev) => {
-        if (prev.length >= 3) {
-          message.warning('最多上传 3 张图片')
+        if (prev.length >= 9) {
+          message.warning('最多上传 9 张图片')
           return prev
         }
         return [

@@ -129,7 +129,7 @@ export function TopHeader({ navigationOpen, onToggleNavigation }: TopHeaderProps
       // 在 AdminCatView 中，更新搜索查询参数
       router(withQuery(route.pathname, { search: q || undefined, page: '1' }))
     } else {
-      router(q ? `/?search=${encodeURIComponent(q)}` : '/')
+      router(withQuery('/', { search: q || undefined, page: '1' }))
     }
     setSuggestions([])
     setSearchedKeyword('')
@@ -172,7 +172,7 @@ export function TopHeader({ navigationOpen, onToggleNavigation }: TopHeaderProps
 
   // 监听路由变化，同步搜索框值
   useEffect(() => {
-    if (isAdminRoute) {
+    if (isAdminRoute || route.pathname === '/') {
       setQuery(new URLSearchParams(route.search).get('search') || '')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

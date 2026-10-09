@@ -8,7 +8,10 @@ import type {
 } from 'axios'
 import { toast } from '@pc/lib/toast'
 import { withAppBasePath, withoutAppBasePath } from '@pc/lib/appPath'
-import type { ApiResponse, RefreshTokenResult } from '@pc/types'
+import type { ApiResponse } from '@pc/types'
+import { refreshSession } from '@shared/refresh'
+import { getSessionRevision } from '@shared/session'
+import { queryClient } from '@shared/queryClient'
 import {
   clearAdminAuthTokens,
   clearAuthTokens,
@@ -16,8 +19,6 @@ import {
   getAdminRefreshToken,
   getAccessToken,
   getRefreshToken,
-  saveAdminAuthTokens,
-  saveAuthTokens,
 } from '@pc/lib/auth'
 
 type AuthScope = 'user' | 'admin' | 'none'
@@ -32,6 +33,7 @@ declare module 'axios' {
     silent?: boolean
     _retry?: boolean
     _authScope?: AuthScope
+    _sessionRevision?: number
     authScope?: AuthScope
   }
 }
@@ -62,18 +64,6 @@ const service: AxiosInstance = axios.create({
   },
 })
 
-const refreshClient = axios.create({
-  baseURL: '/api',
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
-
-const refreshPromises: Record<Exclude<AuthScope, 'none'>, Promise<string> | null> = {
-  user: null,
-  admin: null,
-}
 const sessionExpiryHandled: Record<Exclude<AuthScope, 'none'>, boolean> = {
   user: false,
   admin: false,
@@ -143,45 +133,6 @@ const redirectToLogin = (scope: AuthScope) => {
   window.location.assign(`${loginUrl}?${query.toString()}`)
 }
 
-const requestNewAccessToken = async (scope: Exclude<AuthScope, 'none'>) => {
-  const refreshToken = scope === 'admin' ? getAdminRefreshToken() : getRefreshToken()
-  if (!refreshToken) {
-    throw new Error('缺少 refresh token')
-  }
-
-  const response = await refreshClient.post<ApiResponse<RefreshTokenResult>>(
-    '/users/refresh',
-    undefined,
-    {
-      headers: {
-        Authorization: `Bearer ${refreshToken}`,
-      },
-    },
-  )
-  const payload = response.data
-
-  if (!SUCCESS_CODES.has(payload.code) || !payload.data?.accessToken) {
-    throw new Error(getResponseMessage(payload) || '刷新登录状态失败')
-  }
-
-  const tokens = {
-    accessToken: payload.data.accessToken,
-    refreshToken: payload.data.refreshToken || refreshToken,
-  }
-  if (scope === 'admin') saveAdminAuthTokens(tokens)
-  else saveAuthTokens(tokens)
-  return payload.data.accessToken
-}
-
-const refreshAccessToken = (scope: Exclude<AuthScope, 'none'>) => {
-  if (!refreshPromises[scope]) {
-    refreshPromises[scope] = requestNewAccessToken(scope).finally(() => {
-      refreshPromises[scope] = null
-    })
-  }
-  return refreshPromises[scope]
-}
-
 const retryRequest = async (config: InternalAxiosRequestConfig) => {
   const scope = config._authScope || 'user'
   const refreshToken = scope === 'admin' ? getAdminRefreshToken() : getRefreshToken()
@@ -193,10 +144,11 @@ const retryRequest = async (config: InternalAxiosRequestConfig) => {
   config._retry = true
 
   try {
-    const accessToken = await refreshAccessToken(scope)
+    const accessToken = await refreshSession(scope)
     config.headers.set('Authorization', `Bearer ${accessToken}`)
     return service.request(config)
   } catch {
+    if (config._sessionRevision !== getSessionRevision(scope)) throw new axios.CanceledError('登录会话已变更')
     redirectToLogin(scope)
     throw new HttpRequestError('登录已过期', { status: 401 })
   }
@@ -217,6 +169,10 @@ service.interceptors.request.use(
         ? adminAccessToken
         : getAccessToken()
     config._authScope = unauthenticatedRequest ? 'none' : adminRequest ? 'admin' : 'user'
+    if (config._authScope !== 'none') {
+      config._sessionRevision ??= getSessionRevision(config._authScope)
+      if (config._sessionRevision !== getSessionRevision(config._authScope)) throw new axios.CanceledError('登录会话已变更')
+    }
     if (accessToken) {
       config.headers.set('Authorization', `Bearer ${accessToken}`)
     } else {
@@ -233,6 +189,8 @@ service.interceptors.request.use(
 
 service.interceptors.response.use(
   async (response: AxiosResponse<ApiResponse<unknown>>) => {
+    const scope = response.config._authScope
+    if (scope && scope !== 'none' && response.config._sessionRevision !== getSessionRevision(scope)) throw new axios.CanceledError('登录会话已变更')
     const payload = response.data
     if (!isApiResponse(payload)) {
       const displayMessage = getHttpFailureMessage(response.status)
@@ -244,6 +202,11 @@ service.interceptors.response.use(
     const message = getResponseMessage(payload)
 
     if (SUCCESS_CODES.has(payload.code)) {
+      if (response.config.method && !['get', 'head'].includes(response.config.method) && !isAuthEndpoint(response.config.url)) {
+        // 另一布局使用不同的查询适配器；写操作后统一标记缓存过期，
+        // 下次切换布局会重新加载，避免继续展示刚才的旧数据。
+        void queryClient.invalidateQueries({ refetchType: 'none' })
+      }
       const skipMessages = ['success', '成功', '用户信息获取成功', '获取成功', '请求成功']
       if (
         message &&
@@ -273,6 +236,8 @@ service.interceptors.response.use(
     const status = error.response?.status
     const message = getResponseMessage(error.response?.data)
     const config = error.config
+    const scope = config?._authScope
+    if (scope && scope !== 'none' && config?._sessionRevision !== getSessionRevision(scope)) throw new axios.CanceledError('登录会话已变更')
 
     if (status === 401 && config && !isAuthEndpoint(config.url)) {
       return retryRequest(config)

@@ -10,11 +10,15 @@ import { QueryState } from '@/components/feedback/QueryState'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { asRecord, asString } from '@/utils/format'
 import { normalizeMediaUrl } from '@/utils/media'
+import { useAuthStore } from '@shared/auth.store'
+import { clearDraft, readDraft, useAntdDraft, useDraftSnapshot } from '@shared/drafts'
 
 type EditProfileForm = {
   nickname: string
   slogan: string
   campus: string
+  phone: string
+  wechat: string
 }
 
 const campusOptions = [
@@ -85,7 +89,16 @@ export function MobileLayout() {
   const cameraInputRef = useRef<HTMLInputElement | null>(null)
   const [remoteAvatar, setRemoteAvatar] = useState('')
   const [avatarPreview, setAvatarPreview] = useState('')
-  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarFile, setAvatarFile] = useState<File | null>(() => readDraft('me-edit').files[0] ?? null)
+  const draft = useAntdDraft('me-edit', form)
+  useDraftSnapshot('me-edit', {}, avatarFile ? [avatarFile] : [])
+  const initialized = useRef(false)
+  useEffect(() => {
+    if (!avatarFile) return
+    const url = URL.createObjectURL(avatarFile)
+    setAvatarPreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [avatarFile])
 
   const meQuery = useQuery({
     queryKey: ['me-edit'],
@@ -95,16 +108,17 @@ export function MobileLayout() {
   useEffect(() => {
     const profile = asRecord(meQuery.data?.data)
     if (Object.keys(profile).length === 0) return
-
-    form.setFieldsValue({
+    if (!initialized.current) form.setFieldsValue({
       nickname: asString(profile.nickname),
       slogan: asString(profile.slogan),
       campus: normalizeCampusCode(profile.campus),
+      phone: asString(asRecord(profile.contact).phone),
+      wechat: asString(asRecord(profile.contact).wechat),
+      ...draft,
     })
+    initialized.current = true
     setRemoteAvatar(normalizeMediaUrl(profile.avatarUrl || profile.avatar || profile.avatarKey))
-    setAvatarPreview('')
-    setAvatarFile(null)
-  }, [form, meQuery.data])
+  }, [form, meQuery.data, draft])
 
   const handleAvatarPick = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -143,10 +157,13 @@ export function MobileLayout() {
       await updateMe({
         nickname: String(values.nickname ?? '').trim(),
         campus: Number(normalizeCampusCode(values.campus)),
+        contact: { phone: values.phone || '', wechat: values.wechat || '' },
       })
     },
     onSuccess: async () => {
       message.success('保存成功')
+      clearDraft('me-edit')
+      await useAuthStore.getState().fetchUserInfo()
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['me'] }),
         queryClient.invalidateQueries({ queryKey: ['me-edit'] }),
@@ -159,7 +176,7 @@ export function MobileLayout() {
   return (
     <div className="h5-content pb-6">
       <div className="mb-5 flex items-center justify-between">
-        <button className="text-[15px] font-semibold text-[#333]" onClick={() => navigate(-1)} type="button">
+        <button className="text-[15px] font-semibold text-[#333]" onClick={() => { clearDraft('me-edit'); navigate(-1) }} type="button">
           取消
         </button>
         <h1 className="text-[16px] font-bold">编辑资料</h1>
@@ -238,6 +255,14 @@ export function MobileLayout() {
                   variant="borderless"
                 />
               </Form.Item>
+            </FormRow>
+            <FormRow label="手机号">
+              <Form.Item noStyle name="phone" rules={[{ pattern: /^1[3-9]\d{9}$/, message: '请输入有效手机号' }]}>
+                <Input inputMode="tel" maxLength={11} variant="borderless" className="!text-right" />
+              </Form.Item>
+            </FormRow>
+            <FormRow label="微信号">
+              <Form.Item noStyle name="wechat"><Input maxLength={50} variant="borderless" className="!text-right" /></Form.Item>
             </FormRow>
           </div>
 

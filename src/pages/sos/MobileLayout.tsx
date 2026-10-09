@@ -27,6 +27,7 @@ import { QueryState } from '@/components/feedback/QueryState'
 import { useCampus } from '@/hooks/useCampus'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { asRecord, asString } from '@/utils/format'
+import { clearDraft, useAntdDraft, useDraftMedia } from '@shared/drafts'
 
 type SosForm = {
   catId: string
@@ -131,7 +132,12 @@ export function MobileLayout() {
   const navigate = useNavigate()
   const { campus } = useCampus()
   const [form] = Form.useForm<SosForm>()
-  const [mediaList, setMediaList] = useState<LocalMediaItem[]>([])
+  const [mediaList, setMediaList] = useDraftMedia('sos')
+  useAntdDraft('sos', form, (values) => ({
+    catId: String(values.catId || ''), campus: String(values.campus || ''),
+    location: String(values.location || ''), description: String(values.description || ''),
+    symptoms: values.symptoms as number[] | undefined,
+  }))
   const [successModalOpen, setSuccessModalOpen] = useState(false)
   const selectedSymptoms = Form.useWatch('symptoms', form) ?? []
   const selectedCampus = Form.useWatch('campus', form) ?? normalizeCampusCode(campus)
@@ -185,6 +191,7 @@ export function MobileLayout() {
       })
     },
     onSuccess: () => {
+      clearDraft('sos')
       setSuccessModalOpen(true)
       form.resetFields(['catId', 'symptoms', 'description', 'location'])
       setMediaList([])
@@ -237,14 +244,14 @@ export function MobileLayout() {
   }, [catsQuery.data?.data, colorOptions, locationOptions])
 
   useEffect(() => {
-    form.setFieldValue('campus', normalizeCampusCode(campus))
+    if (!form.getFieldValue('campus')) form.setFieldValue('campus', normalizeCampusCode(campus))
   }, [campus, form])
 
   useEffect(() => {
-    if (!selectedCatId) return
+    if (!selectedCatId || !catsQuery.isSuccess) return
     if (catOptions.some((item) => item.value === selectedCatId)) return
     form.setFieldValue('catId', undefined)
-  }, [catOptions, form, selectedCatId])
+  }, [catOptions, form, selectedCatId, catsQuery.isSuccess])
 
   const appendMediaFiles = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? [])
@@ -460,7 +467,7 @@ export function MobileLayout() {
         </Form>
       </div>
 
-      <Modal open={successModalOpen} title="已成功上报" okText="知道了" cancelButtonProps={{ style: { display: 'none' } }} onOk={() => setSuccessModalOpen(false)} onCancel={() => setSuccessModalOpen(false)}>
+      <Modal open={successModalOpen} title="已成功上报" okText="知道了" cancelButtonProps={{ style: { display: 'none' } }} onOk={() => navigate('/my-sos')} onCancel={() => navigate('/my-sos')}>
         我们已收到你的求助信息，请保持电话畅通。
       </Modal>
     </div>

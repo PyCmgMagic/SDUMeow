@@ -22,9 +22,9 @@ import { getAnnouncements } from '@/api/endpoints/announcements'
 import { getCats } from '@/api/endpoints/cats'
 import { getColors, getLocations, getTags } from '@/api/endpoints/types'
 import { QueryState } from '@/components/feedback/QueryState'
-import { useCampus } from '@/hooks/useCampus'
+import { useHomeFilters } from '@shared/useHomeFilters'
 import { usePageTitle } from '@/hooks/usePageTitle'
-import { getNewAnnouncementCount } from '@/utils/announcementNotifications'
+import { ANNOUNCEMENT_SEEN_EVENT, getNewAnnouncementCount, readAnnouncementSeenAt } from '@/utils/announcementNotifications'
 import { asArray, asNumber, asRecord, asString } from '@/utils/format'
 
 type CatCardItem = {
@@ -171,11 +171,6 @@ function CoverImage({ src, alt }: CoverImageProps) {
   return <img alt={alt} className="h-full w-full object-cover" loading="lazy" referrerPolicy="no-referrer" src={src} onError={() => setHasError(true)} />
 }
 
-function getCampusCode(campusValue: string): string {
-  const campus = campusOptions.find((item) => item.value === campusValue)
-  return campus?.code ?? '5'
-}
-
 function pickStarCat(cats: CatCardItem[]): CatCardItem | null {
   if (!cats.length) return null
   return [...cats].sort((a, b) => b.popularity - a.popularity)[0]
@@ -183,30 +178,36 @@ function pickStarCat(cats: CatCardItem[]): CatCardItem | null {
 
 export function MobileHomePage() {
   usePageTitle('首页')
-  const { campus, setCampus } = useCampus()
-  const colorFilterRef = useRef<HTMLDivElement | null>(null)
-  const [keywordInput, setKeywordInput] = useState('')
-  const [keyword, setKeyword] = useState('')
-  const [activeColor, setActiveColor] = useState('')
-
+  const filters = useHomeFilters()
+  const [seenAt, setSeenAt] = useState(readAnnouncementSeenAt)
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setKeyword(keywordInput.trim())
-    }, 250)
-    return () => window.clearTimeout(timer)
-  }, [keywordInput])
-
-  const campusCode = getCampusCode(campus)
+    const update = () => setSeenAt(readAnnouncementSeenAt())
+    window.addEventListener(ANNOUNCEMENT_SEEN_EVENT, update)
+    window.addEventListener('storage', update)
+    return () => {
+      window.removeEventListener(ANNOUNCEMENT_SEEN_EVENT, update)
+      window.removeEventListener('storage', update)
+    }
+  }, [])
+  const campus = campusOptions.find((item) => item.code === filters.campus)?.value ?? 'SOFTWARE_PARK'
+  const setCampus = filters.setCampus
+  const colorFilterRef = useRef<HTMLDivElement | null>(null)
+  const keywordInput = filters.search
+  const setKeywordInput = filters.setSearch
+  const keyword = filters.search.trim()
+  const activeColor = filters.color
+  const setActiveColor = filters.setColor
+  const campusCode = filters.campus
 
   const catsQuery = useQuery({
-    queryKey: ['cats', 'home', campusCode, keyword, activeColor],
+    queryKey: ['cats', 'home', campusCode, keyword, activeColor, filters.page],
     queryFn: () =>
       getCats({
         campus: campusCode,
-        page: 1,
-        pageSize: 80,
+        page: filters.page,
+        pageSize: 20,
         search: keyword || undefined,
-        color: undefined,
+        color: activeColor || undefined,
       }),
   })
 
@@ -247,21 +248,21 @@ export function MobileHomePage() {
   const visibleColorFilters = useMemo(
     () =>
       typeOptions.colors.length
-        ? [{ label: '全部', value: '' }, ...typeOptions.colors.map((item) => ({ label: item.label, value: item.label }))]
-        : colorFilters,
+        ? [{ label: '全部', value: '' }, ...typeOptions.colors.map((item) => ({ label: item.label, value: String(item.value) }))]
+        : colorFilters.slice(0, 1),
     [typeOptions.colors],
   )
 
   const list = useMemo(() => {
     const normalized = normalizeCatList(catsQuery.data?.data, typeOptions)
-    return activeColor ? normalized.filter((item) => item.color === activeColor) : normalized
-  }, [activeColor, catsQuery.data?.data, typeOptions])
+    return normalized
+  }, [catsQuery.data?.data, typeOptions])
   const allInCampus = useMemo(() => normalizeCatList(statsQuery.data?.data, typeOptions), [statsQuery.data?.data, typeOptions])
 
   const starCat = useMemo(() => pickStarCat(allInCampus.length ? allInCampus : list), [allInCampus, list])
   const newAnnouncementCount = useMemo(
-    () => (announcementBadgeQuery.isSuccess ? getNewAnnouncementCount(announcementBadgeQuery.data?.data) : 0),
-    [announcementBadgeQuery.data?.data, announcementBadgeQuery.isSuccess],
+    () => (announcementBadgeQuery.isSuccess ? getNewAnnouncementCount(announcementBadgeQuery.data?.data, seenAt) : 0),
+    [announcementBadgeQuery.data?.data, announcementBadgeQuery.isSuccess, seenAt],
   )
 
   const stats = useMemo(() => {
@@ -490,7 +491,11 @@ export function MobileHomePage() {
         </div>
       </QueryState>
 
-      <p className="mt-5 pb-4 text-center text-[12px] text-[#999]">已经到底啦</p>
+      <div className="mt-5 flex items-center justify-center gap-4 pb-4 text-sm">
+        <button disabled={filters.page <= 1} className="disabled:opacity-40" onClick={() => filters.setPage(filters.page - 1)}>上一页</button>
+        <span>第 {filters.page} 页</span>
+        <button disabled={filters.page * 20 >= asNumber(asRecord(catsQuery.data?.data).total, list.length)} className="disabled:opacity-40" onClick={() => filters.setPage(filters.page + 1)}>下一页</button>
+      </div>
     </div>
   )
 }

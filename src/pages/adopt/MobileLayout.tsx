@@ -21,6 +21,7 @@ import { normalizeCats } from '@/api/adapters/cats'
 import { createAdoption } from '@/api/endpoints/adoptions'
 import { getCats } from '@/api/endpoints/cats'
 import { usePageTitle } from '@/hooks/usePageTitle'
+import { clearDraft, useAntdDraft } from '@shared/drafts'
 import './mobile.css'
 
 type AdoptionForm = {
@@ -74,6 +75,10 @@ export function MobileLayout() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [form] = Form.useForm<AdoptionForm>()
+  useAntdDraft('adopt', form,
+    (values) => ({ ...values, agree: Boolean(values.agreement) }),
+    (values) => ({ ...values, agreement: values.agree }),
+  )
   const housing = Form.useWatch('housing', form)
   const experience = Form.useWatch('experience', form)
 
@@ -85,6 +90,8 @@ export function MobileLayout() {
 
   useEffect(() => {
     if (catOptions.length === 0) return
+    const currentCatId = form.getFieldValue('catId')
+    if (currentCatId && catOptions.some((item) => item.id === currentCatId)) return
     const routeCatId = searchParams.get('catId')?.trim()
     const targetCatId = routeCatId && catOptions.some((item) => item.id === routeCatId) ? routeCatId : catOptions[0]?.id
     if (!targetCatId) return
@@ -107,7 +114,7 @@ export function MobileLayout() {
           wechat: payload.wechat,
         },
       }),
-    onSuccess: () => message.success('提交成功，请等待协会审核'),
+    onSuccess: () => { clearDraft('adopt'); message.success('提交成功，请等待协会审核'); navigate('/my-adoptions') },
     onError: (error) => message.error(error instanceof Error ? error.message : '提交失败'),
   })
 

@@ -11,6 +11,7 @@
  * 和登录角色选择对应 scope，跨视口共享时也不会混用 token。
  */
 
+import { getJwtPayload } from './jwt'
 export type SessionScope = 'user' | 'admin'
 
 export interface SessionTokens {
@@ -20,6 +21,8 @@ export interface SessionTokens {
 
 type SessionListener = (scope: SessionScope, accessToken: string, source: 'local' | 'storage') => void
 const sessionListeners = new Set<SessionListener>()
+const revisions: Record<SessionScope, number> = { user: 0, admin: 0 }
+export const getSessionRevision = (scope: SessionScope): number => revisions[scope]
 
 export function subscribeSession(listener: SessionListener): () => void {
   sessionListeners.add(listener)
@@ -34,6 +37,7 @@ function notifySession(scope: SessionScope, source: 'local' | 'storage' = 'local
 const NEW_KEY = {
   accessToken: (scope: SessionScope) => `meow.session.${scope}.accessToken`,
   refreshToken: (scope: SessionScope) => `meow.session.${scope}.refreshToken`,
+  identity: (scope: SessionScope) => `meow.session.${scope}.identity`,
 } as const
 
 // 迁移兼容期读取顺序：桌面端旧 key 在前（它先上线）。
@@ -64,7 +68,27 @@ export function readRefreshToken(scope: SessionScope = 'user'): string {
   return readFirst([NEW_KEY.refreshToken(scope), ...LEGACY_KEYS[scope].refreshToken]) || ''
 }
 
-export function writeSession(scope: SessionScope, tokens: SessionTokens): void {
+function readSessionIdentity(scope: SessionScope): string {
+  const token = readAccessToken(scope)
+  if (!token) return ''
+  const identity = localStorage.getItem(NEW_KEY.identity(scope))
+  if (identity) return identity
+  const claims = getJwtPayload(token)
+  const subject = claims?.sub ?? claims?.uid ?? claims?.userId ?? claims?.id
+  return subject == null ? token : `${scope}:${String(subject)}`
+}
+const identities = { user: readSessionIdentity('user'), admin: readSessionIdentity('admin') }
+
+export function writeSession(scope: SessionScope, tokens: SessionTokens, refreshing = false): void {
+  if (!refreshing) {
+    revisions[scope] += 1
+    const identity = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    localStorage.setItem(NEW_KEY.identity(scope), identity)
+  } else if (!localStorage.getItem(NEW_KEY.identity(scope))) {
+    localStorage.setItem(NEW_KEY.identity(scope), readSessionIdentity(scope))
+  }
   localStorage.setItem(NEW_KEY.accessToken(scope), tokens.accessToken)
 
   if (tokens.refreshToken) {
@@ -76,14 +100,18 @@ export function writeSession(scope: SessionScope, tokens: SessionTokens): void {
   // a different account's old token or refresh token.
   for (const key of LEGACY_KEYS[scope].accessToken) localStorage.removeItem(key)
   for (const key of LEGACY_KEYS[scope].refreshToken) localStorage.removeItem(key)
+  identities[scope] = readSessionIdentity(scope)
   notifySession(scope)
 }
 
 export function clearSession(scope: SessionScope): void {
+  revisions[scope] += 1
+  localStorage.removeItem(NEW_KEY.identity(scope))
   localStorage.removeItem(NEW_KEY.accessToken(scope))
   localStorage.removeItem(NEW_KEY.refreshToken(scope))
   for (const key of LEGACY_KEYS[scope].accessToken) localStorage.removeItem(key)
   for (const key of LEGACY_KEYS[scope].refreshToken) localStorage.removeItem(key)
+  identities[scope] = ''
   notifySession(scope)
 }
 
@@ -92,9 +120,14 @@ if (typeof window !== 'undefined') {
   window.addEventListener('storage', (event) => {
     if (event.storageArea !== localStorage) return
     for (const scope of ['user', 'admin'] as const) {
-      const keys = [NEW_KEY.accessToken(scope), NEW_KEY.refreshToken(scope),
+      const keys = [NEW_KEY.accessToken(scope), NEW_KEY.refreshToken(scope), NEW_KEY.identity(scope),
         ...LEGACY_KEYS[scope].accessToken, ...LEGACY_KEYS[scope].refreshToken]
-      if (event.key === null || keys.includes(event.key)) notifySession(scope, 'storage')
+      if (event.key === null || keys.includes(event.key)) {
+        const identity = readSessionIdentity(scope)
+        if (identity !== identities[scope]) revisions[scope] += 1
+        identities[scope] = identity
+        notifySession(scope, 'storage')
+      }
     }
   })
 }

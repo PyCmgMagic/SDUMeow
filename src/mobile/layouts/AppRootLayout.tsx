@@ -15,6 +15,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { BottomNav } from '@/components/navigation/BottomNav'
 import { PersistentUserNavigationContext } from '@/components/navigation/navigationContext'
 import { userNavItems } from '@/components/navigation/userNavItems'
+import { getSessionRevision, readAccessToken } from '@shared/session'
 
 function buildProfile(profileData: unknown, role: UserRole) {
   const me = asRecord(profileData)
@@ -113,9 +114,11 @@ function AuthCallbackHandler() {
     // previous role can belong to another viewport, so the callback must tell
     // the profile request which credentials to use explicitly.
     storage.setTokens({ token, refreshToken }, seedScope)
+    const revision = getSessionRevision(seedScope)
 
     void getMeWithScope(seedScope)
       .then((result) => {
+        if (getSessionRevision(seedScope) !== revision) return
         const inferredRole = inferRoleFromProfile(result.data, inferRoleFromToken(token, UserRole.User))
         const role = pendingRole === UserRole.Admin ? UserRole.Admin : inferredRole
         const finalScope = role === UserRole.Admin ? 'admin' : 'user'
@@ -134,7 +137,7 @@ function AuthCallbackHandler() {
         }
 
         useAuthStore.getState().acceptSession({
-          token,
+          token: readAccessToken(finalScope) || token,
           role,
           profile: buildProfile(result.data, role),
         })
@@ -142,6 +145,7 @@ function AuthCallbackHandler() {
         navigate(role === UserRole.Admin ? '/admin/dashboard' : '/', { replace: true })
       })
       .catch(() => {
+        if (getSessionRevision(seedScope) !== revision) return
         if (pendingRole === UserRole.Admin && tokenRole !== UserRole.Admin) {
           storage.clearToken(seedScope)
           useAuthStore.getState().logoutActive()

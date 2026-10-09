@@ -9,6 +9,7 @@ import { userNavItems } from '@/components/navigation/userNavItems'
 import { useAuth } from '@/hooks/useAuth'
 import { UserRole } from '@/types/enums'
 import { asNumber, asRecord } from '@/utils/format'
+import { useAuthStore } from '@shared/auth.store'
 
 const AUTO_CHECKIN_TOTAL_DAYS_STORAGE_KEY = 'user:auto-checkin:total-days'
 const AUTO_CHECKIN_CONTINUOUS_DAYS_STORAGE_KEY = 'user:auto-checkin:continuous-days'
@@ -42,6 +43,7 @@ export function UserLayout({ children }: { children?: ReactNode }) {
           window.localStorage.setItem(AUTO_CHECKIN_CONTINUOUS_DAYS_STORAGE_KEY, String(Math.floor(continuousDays)))
         }
         await queryClient.invalidateQueries({ queryKey: ['me'] })
+        await useAuthStore.getState().fetchUserInfo()
         console.log('[auto-checkin] success', result?.data)
       } catch (error) {
         console.log('[auto-checkin] failed', error)
