@@ -13,6 +13,9 @@ apps/web/mock/
 apps/web/tests/
 apps/web/vite.config.local.ts
 
+# Local documentation and API specifications
+/docs/
+
 # Local source checkouts used while importing the original repositories
 .sources
 
