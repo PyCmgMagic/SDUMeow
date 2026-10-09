@@ -127,13 +127,13 @@ function AuthCallbackHandler() {
 
         if (pendingRole === UserRole.Admin && inferredRole !== UserRole.Admin) {
           storage.clearToken(seedScope)
-          useAuthStore.getState().logout()
+          useAuthStore.getState().logoutActive()
           window.sessionStorage.setItem(STORAGE_KEYS.authLoginNotice, '无管理员权限')
           navigate('/login', { replace: true, state: { loginNotice: '无管理员权限' } })
           return
         }
 
-        useAuthStore.getState().login({
+        useAuthStore.getState().acceptSession({
           token,
           role,
           profile: buildProfile(result.data, role),
@@ -144,13 +144,13 @@ function AuthCallbackHandler() {
       .catch(() => {
         if (pendingRole === UserRole.Admin && tokenRole !== UserRole.Admin) {
           storage.clearToken(seedScope)
-          useAuthStore.getState().logout()
+          useAuthStore.getState().logoutActive()
           window.sessionStorage.setItem(STORAGE_KEYS.authLoginNotice, '无管理员权限')
           navigate('/login', { replace: true, state: { loginNotice: '无管理员权限' } })
           return
         }
 
-        useAuthStore.getState().login({ token, role: seedRole })
+        useAuthStore.getState().acceptSession({ token, role: seedRole })
         navigate(seedRole === UserRole.Admin ? '/admin/dashboard' : '/', { replace: true })
         message.success('登录成功')
       })

@@ -8,7 +8,6 @@ import logo from '@/assets/猫猫图鉴-logo.png'
 import { useAuth } from '@/hooks/useAuth'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { STORAGE_KEYS } from '@/utils/constants'
-import { storage } from '@/utils/storage'
 import { withAppBasePath } from '@/utils/appPath'
 
 function shouldBridgeToLocalhost(): boolean {
@@ -83,7 +82,6 @@ export function MobileLayout() {
   }
 
   const handleGuest = () => {
-    storage.clearToken()
     enterGuest()
     navigate('/', { replace: true })
   }

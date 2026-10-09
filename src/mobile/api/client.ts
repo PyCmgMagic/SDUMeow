@@ -67,8 +67,9 @@ httpClient.interceptors.request.use((config) => {
 })
 
 function clearSession(scope: SessionScope) {
-  storage.clearToken(scope)
-  useAuthStore.getState().logout()
+  const state = useAuthStore.getState()
+  if (scope === 'admin') state.adminLogout()
+  else state.logout()
 }
 
 function markLoginNotice() {
@@ -144,15 +145,6 @@ async function refreshAccessToken(scope: SessionScope): Promise<string | null> {
     },
     scope,
   )
-
-  const authState = useAuthStore.getState()
-  if (authState.role) {
-    authState.login({
-      token: nextAccessToken,
-      role: authState.role,
-      profile: authState.profile,
-    })
-  }
 
   return nextAccessToken
 }

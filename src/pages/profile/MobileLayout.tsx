@@ -10,7 +10,6 @@ import { useAuth } from '@/hooks/useAuth'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { asNumber, asRecord, asString, toPaged } from '@/utils/format'
 import { normalizeMediaUrl } from '@/utils/media'
-import { storage } from '@/utils/storage'
 
 const campusCodeLabelMap: Record<string, string> = {
   '0': '中心校区',
@@ -62,7 +61,6 @@ export function MobileLayout() {
   })
 
   const handleLogout = () => {
-    storage.clearToken()
     logout()
     navigate('/login', { replace: true })
   }

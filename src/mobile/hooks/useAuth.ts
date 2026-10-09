@@ -1,16 +1,16 @@
 import { useMemo } from 'react'
 
-import { useAuthStore } from '@/store'
+import { useAuthStore } from '@shared/auth.store'
 import { UserRole } from '@/types/enums'
 import { hasValidSession } from '@/utils/session'
 
 export function useAuth() {
-  const token = useAuthStore((state) => state.token)
+  const token = useAuthStore((state) => (state.role === UserRole.Admin ? state.adminToken : state.token) || null)
   const role = useAuthStore((state) => state.role)
   const profile = useAuthStore((state) => state.profile)
   const hydrated = useAuthStore((state) => state.hydrated)
-  const login = useAuthStore((state) => state.login)
-  const logout = useAuthStore((state) => state.logout)
+  const login = useAuthStore((state) => state.acceptSession)
+  const logout = useAuthStore((state) => state.logoutActive)
   const enterGuest = useAuthStore((state) => state.enterGuest)
 
   const isAuthenticated = hasValidSession(role, token)
