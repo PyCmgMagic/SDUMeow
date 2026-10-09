@@ -33,6 +33,12 @@ import {
 import { ConfirmDialog } from '@pc/components/ui/confirm-dialog'
 import { AdminPageHeader } from '@pc/components/admin/AdminPageHeader'
 import { AdminPanel } from '@pc/components/admin/AdminPanel'
+import { AdminStatusTabs } from '@pc/components/admin/AdminStatusTabs'
+import { Input } from '@pc/components/ui/input'
+import { useListFilters } from '@shared/useListFilters'
+import { adminUserRole } from '@shared/adminUserRole'
+import { filterPagedList } from '@shared/filterPagedList'
+import { hydrateUserRoles } from '@shared/hydrateUserRoles'
 
 const statusText = (status: unknown) => {
   if (status === null || status === undefined || status === '') return '正常'
@@ -45,14 +51,8 @@ const isBanned = (status: unknown) =>
   status === 1 || status === '1' || String(status).toUpperCase() === 'BANNED'
 
 const roleText = (user: AdminUserItem | AdminUserDetail) => {
-  const role = (user as AdminUserItem).permission ?? (user as AdminUserItem).role ?? user.roleName
-  if (role === 0 || role === '0') return '普通用户'
-  if (role === 1 || role === '1') return '管理员'
-
-  const normalized = String(role || '').trim().toUpperCase()
-  if (normalized === 'ADMIN' || normalized === 'ADMINISTRATOR' || normalized.includes('管理员')) return '管理员'
-  if (normalized === 'USER' || normalized === 'MEMBER' || normalized.includes('普通用户')) return '普通用户'
-  return normalized || '未知'
+  const role = adminUserRole(user)
+  return role === 'admin' ? '管理员' : role === 'user' ? '普通用户' : '未知'
 }
 
 const isAdministrator = (user: AdminUserItem | AdminUserDetail) => roleText(user) === '管理员'
@@ -70,6 +70,9 @@ const DETAIL_CONCURRENCY = 3
 const PAGE_SIZE = 10 // 每页显示数量
 
 export function DesktopLayout() {
+  const filters = useListFilters()
+  const roleValue = filters.params.get('role') || ''
+  const roleFilter = ['admin', 'user'].includes(roleValue) ? roleValue : ''
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -88,13 +91,8 @@ export function DesktopLayout() {
   const [banTargetUser, setBanTargetUser] = useState<AdminUserItem | null>(null)
   const latestRequestIdRef = useRef(0)
 
-  const queryPage = new URLSearchParams(location.search).get('page')
-  const querySearch = new URLSearchParams(location.search).get('search')
-  const searchTerm = querySearch !== null ? querySearch.trim() : ''
-  const currentPage = (() => {
-    const value = Number.parseInt(String(queryPage || '1'), 10)
-    return Number.isInteger(value) && value > 0 ? value : 1
-  })()
+  const searchTerm = filters.search.trim()
+  const currentPage = filters.page
 
   const withQuery = (mutations: (search: URLSearchParams) => void) => {
     const next = new URLSearchParams(location.search)
@@ -148,11 +146,13 @@ export function DesktopLayout() {
     const requestId = ++latestRequestIdRef.current
     setLoading(true)
     try {
-      const res = await adminUserApi.getUserList({
-        page: currentPage,
-        size: PAGE_SIZE,
-        ...(searchTerm ? { search: searchTerm } : {}),
-      })
+      const load = async (page: number, size: number) => {
+        const response = await adminUserApi.getUserList({ page, size, ...(searchTerm ? { search: searchTerm } : {}) })
+        if (!roleFilter) return response
+        const items = await hydrateUserRoles(response.items, async (user) => ({ ...user, ...await adminUserApi.getUserDetail(user.id) }))
+        return { ...response, items }
+      }
+      const res = roleFilter ? await filterPagedList<AdminUserItem>(load, currentPage, (user) => adminUserRole(user) === roleFilter) : await load(currentPage, PAGE_SIZE)
       if (requestId !== latestRequestIdRef.current) return
       const items = res.items || []
       setUserList(items)
@@ -163,7 +163,7 @@ export function DesktopLayout() {
         ? responsePages
         : Math.max(Math.ceil(resolvedTotal / PAGE_SIZE), 1)
       setTotalPages(resolvedPages)
-      if (resolvedTotal > 0 && currentPage > resolvedPages) {
+      if (currentPage > resolvedPages) {
         navigate(
           withQuery((search) => search.set('page', String(resolvedPages))),
           { replace: true },
@@ -206,7 +206,7 @@ export function DesktopLayout() {
   useEffect(() => {
     void fetchUserList()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, searchTerm])
+  }, [currentPage, searchTerm, roleFilter])
 
   // 查看详情（弹窗）
   const handleViewDetail = async (userId: string | number) => {
@@ -253,6 +253,11 @@ export function DesktopLayout() {
     <>
       <div className="flex flex-col gap-6">
         <AdminPageHeader eyebrow="USER DIRECTORY" title="用户管理" description="查看账户信息并管理用户状态。" icon={Users} tone="yellow" />
+        <AdminPanel><div className="flex flex-wrap gap-3 p-4">
+          <Input aria-label="搜索用户" placeholder="搜索用户名、学号、学院..." value={filters.search} onChange={(event) => filters.setSearch(event.target.value)} className="max-w-sm" />
+          <AdminStatusTabs ariaLabel="用户角色筛选" value={roleFilter} onChange={(value) => filters.update({ role: String(value || '') })}
+            options={[{ label: '全部用户', value: '' }, { label: '管理员', value: 'admin' }, { label: '普通用户', value: 'user' }]} />
+        </div></AdminPanel>
 
         <AdminPanel title="用户列表" meta={`共 ${total} 位用户`}>
           <div>

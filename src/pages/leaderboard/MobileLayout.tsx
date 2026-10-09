@@ -9,6 +9,7 @@ import { getLeaderboard } from '@/api/endpoints/leaderboard'
 import { QueryState } from '@/components/feedback/QueryState'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { asNumber, asRecord, asString, toPaged } from '@/utils/format'
+import { leaderboardTabs, useLeaderboardFilters } from '@shared/useLeaderboardFilters'
 
 type RankCat = {
   rank: number
@@ -140,10 +141,11 @@ function normalizeLeaderboard(payload: unknown): RankCat[] {
 export function MobileLayout() {
   usePageTitle('全校封神榜')
   const navigate = useNavigate()
+  const { tab, setTab, showAll, setShowAll } = useLeaderboardFilters()
 
   const query = useQuery({
-    queryKey: ['leaderboard', 'popularity'],
-    queryFn: () => getLeaderboard('popularity'),
+    queryKey: ['leaderboard', tab.key],
+    queryFn: () => getLeaderboard(tab.key),
   })
 
   const rankedCats = useMemo(() => normalizeLeaderboard(query.data?.data), [query.data?.data])
@@ -204,7 +206,7 @@ export function MobileLayout() {
 
     return ordered.length === source.length ? ordered : source
   }, [displayRankedCats])
-  const followRanks = displayRankedCats.slice(3)
+  const followRanks = displayRankedCats.slice(3, showAll ? undefined : 20)
 
   return (
     <div className="h5-content pb-6">
@@ -217,16 +219,18 @@ export function MobileLayout() {
       </div>
 
       <div className="mb-7 flex rounded-full bg-white p-1 shadow-[0_8px_16px_rgba(0,0,0,0.06)]">
-        <button className="flex-1 rounded-full bg-[#1a1a1a] py-2 text-[13px] font-semibold text-white" type="button">
-          人气榜
-        </button>
+        {leaderboardTabs.map((item) => (
+          <button key={item.key} aria-pressed={tab.key === item.key}
+            className={clsx('min-w-0 flex-1 rounded-full py-2 text-[13px] font-semibold', tab.key === item.key ? 'bg-[#1a1a1a] text-white' : 'text-[#64748b]')}
+            onClick={() => setTab(item.key)} type="button">{item.label}</button>
+        ))}
       </div>
 
       <QueryState
         error={query.error}
         isEmpty={!query.isLoading && !query.error && rankedCats.length === 0}
         isLoading={query.isLoading}
-        emptyDescription="暂无投喂排行数据"
+        emptyDescription="暂无排行数据"
       >
         <div className="mb-7 flex items-end justify-center gap-4">
           {topThree.map((item) => {
@@ -254,7 +258,7 @@ export function MobileLayout() {
                 </div>
                 <p className={clsx('mt-2 font-bold text-[#333]', first ? 'text-[15px]' : 'text-[13px]')}>{item.name}</p>
                 <p className="text-[11px] text-[#7f8c8d]">{item.campus}</p>
-                <p className={clsx('text-[11px]', first ? 'font-semibold text-[#ffa000]' : 'text-[#999]')}>{item.feedCount} 次投喂</p>
+                <p className={clsx('text-[11px]', first ? 'font-semibold text-[#ffa000]' : 'text-[#999]')}>{item.feedCount} {tab.unit}</p>
               </>
             )
 
@@ -282,7 +286,7 @@ export function MobileLayout() {
                   <p className="text-[14px] font-semibold text-[#333]">{item.name}</p>
                   <p className="text-[11px] text-[#999]">常驻：{item.campus}</p>
                 </div>
-                <span className="text-[14px] font-semibold text-[#555]">{item.feedCount} 次</span>
+                <span className="text-[14px] font-semibold text-[#555]">{item.feedCount} {tab.unit}</span>
               </>
             )
 
@@ -301,6 +305,9 @@ export function MobileLayout() {
             )
           })}
         </div>
+        {displayRankedCats.length > 20 ? (
+          <button type="button" className="mt-4 w-full py-3 text-sm text-[#64748b]" onClick={() => setShowAll(!showAll)}>{showAll ? '收起' : '查看更多'}</button>
+        ) : null}
       </QueryState>
     </div>
   )

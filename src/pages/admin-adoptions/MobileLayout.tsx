@@ -2,7 +2,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Input } from 'antd'
 import clsx from 'clsx'
-import { type WheelEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { type WheelEvent, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 
 import { ApiNotFoundError } from '@/api/adapters/errors'
@@ -10,8 +10,11 @@ import { getAdminAdoptions } from '@/api/endpoints/adoptions'
 import { QueryState } from '@/components/feedback/QueryState'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { asRecord, asString, formatTimestampText, toPaged } from '@/utils/format'
+import { useListFilters, ADMIN_PAGE_SIZE } from '@shared/useListFilters'
+import { ListPagination } from '@shared/ListPagination'
+import { filterPagedList } from '@shared/filterPagedList'
 
-type AdoptionStatus = 'pending' | 'interview' | 'approved' | 'rejected'
+type AdoptionStatus = 'pending' | 'interview' | 'approved' | 'rejected' | 'completed' | 'cancelled'
 type FilterKey = 'all' | AdoptionStatus
 
 type AdoptionItem = {
@@ -33,21 +36,19 @@ const statusText: Record<AdoptionStatus, string> = {
   interview: '待面谈',
   approved: '通过',
   rejected: '拒绝',
+  completed: '已完成',
+  cancelled: '已取消',
 }
 
-const filterToStatus: Record<Exclude<FilterKey, 'all'>, AdoptionStatus> = {
-  pending: 'pending',
-  interview: 'interview',
-  approved: 'approved',
-  rejected: 'rejected',
-}
-
-const apiStatusByStatus: Record<AdoptionStatus, 'PENDING' | 'INTERVIEW' | 'APPROVED' | 'REJECTED'> = {
+const apiStatusByStatus: Record<AdoptionStatus, string> = {
   pending: 'PENDING',
   interview: 'INTERVIEW',
   approved: 'APPROVED',
   rejected: 'REJECTED',
+  completed: 'COMPLETED',
+  cancelled: 'CANCELLED',
 }
+const statusOrder: AdoptionStatus[] = ['pending', 'interview', 'approved', 'rejected', 'completed', 'cancelled']
 
 const fallbackItems: AdoptionItem[] = [
   {
@@ -94,7 +95,10 @@ const fallbackItems: AdoptionItem[] = [
 ]
 
 function toAdoptionStatus(value: unknown, fallbackStatus: AdoptionStatus): AdoptionStatus {
+  if (value !== null && value !== undefined && value !== '' && statusOrder[Number(value)]) return statusOrder[Number(value)]
   const status = asString(value, fallbackStatus).trim().toUpperCase()
+  if (status.includes('CANCEL')) return 'cancelled'
+  if (status.includes('COMPLETED')) return 'completed'
 
   if (status.includes('REJECT') || status.includes('REFUSE') || status.includes('DENY') || status.includes('驳回') || status.includes('拒绝')) {
     return 'rejected'
@@ -141,108 +145,31 @@ function normalizeItems(payload: unknown, fallbackStatus: AdoptionStatus): Adopt
 
 export function MobileLayout() {
   usePageTitle('领养申请审批')
-  const [keywordInput, setKeywordInput] = useState('')
-  const [keyword, setKeyword] = useState('')
-  const [activeFilter, setActiveFilter] = useState<FilterKey>('all')
+  const filters = useListFilters(['0', '1', '2', '3', '4', '5'])
+  const keywordInput = filters.search
+  const setKeywordInput = filters.setSearch
+  const keyword = keywordInput.trim().toLowerCase()
+  const activeFilter: FilterKey = filters.status ? statusOrder[Number(filters.status)] : 'all'
+  const setActiveFilter = (filter: FilterKey) => filters.setStatus(filter === 'all' ? '' : String(statusOrder.indexOf(filter)))
+  const apiStatus = activeFilter === 'all' ? '' : apiStatusByStatus[activeFilter]
   const filterRowRef = useRef<HTMLDivElement | null>(null)
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setKeyword(keywordInput.trim().toLowerCase())
-    }, 250)
-    return () => window.clearTimeout(timer)
-  }, [keywordInput])
-
-  const pendingQuery = useQuery({
-    queryKey: ['admin-adoptions', 'status', apiStatusByStatus.pending],
-    queryFn: () =>
-      getAdminAdoptions({
-        status: apiStatusByStatus.pending,
-        page: 1,
-        size: 200,
-      }),
+  const query = useQuery({
+    refetchOnMount: 'always',
+    queryKey: ['admin-adoptions', 'list', filters.page, filters.status, keyword],
+    queryFn: async () => {
+      const load = async (page: number, size: number) => (await getAdminAdoptions({ status: apiStatus || undefined, page, size })).data
+      if (!keyword) return getAdminAdoptions({ status: apiStatus || undefined, page: filters.page, size: ADMIN_PAGE_SIZE })
+      const data = await filterPagedList<Record<string, unknown>>(load, filters.page, (row) =>
+        [row.id, row.applicantName || row.userName, row.catName, asRecord(row.contact).phone, asRecord(row.contact).wechat].join(' ').toLowerCase().includes(keyword))
+      return { data }
+    },
   })
-  const interviewQuery = useQuery({
-    queryKey: ['admin-adoptions', 'status', apiStatusByStatus.interview],
-    queryFn: () =>
-      getAdminAdoptions({
-        status: apiStatusByStatus.interview,
-        page: 1,
-        size: 200,
-      }),
-  })
-  const approvedQuery = useQuery({
-    queryKey: ['admin-adoptions', 'status', apiStatusByStatus.approved],
-    queryFn: () =>
-      getAdminAdoptions({
-        status: apiStatusByStatus.approved,
-        page: 1,
-        size: 200,
-      }),
-  })
-  const rejectedQuery = useQuery({
-    queryKey: ['admin-adoptions', 'status', apiStatusByStatus.rejected],
-    queryFn: () =>
-      getAdminAdoptions({
-        status: apiStatusByStatus.rejected,
-        page: 1,
-        size: 200,
-      }),
-  })
-
   const allItems = useMemo(() => {
-    const normalized = [
-      ...normalizeItems(pendingQuery.data?.data, 'pending'),
-      ...normalizeItems(interviewQuery.data?.data, 'interview'),
-      ...normalizeItems(approvedQuery.data?.data, 'approved'),
-      ...normalizeItems(rejectedQuery.data?.data, 'rejected'),
-    ]
-
-    if (
-      !normalized.length &&
-      pendingQuery.error instanceof ApiNotFoundError &&
-      interviewQuery.error instanceof ApiNotFoundError &&
-      approvedQuery.error instanceof ApiNotFoundError &&
-      rejectedQuery.error instanceof ApiNotFoundError
-    ) {
-      return fallbackItems
-    }
-
-    return normalized
-  }, [
-    approvedQuery.data?.data,
-    approvedQuery.error,
-    interviewQuery.data?.data,
-    interviewQuery.error,
-    pendingQuery.data?.data,
-    pendingQuery.error,
-    rejectedQuery.data?.data,
-    rejectedQuery.error,
-  ])
-
-  const items = useMemo(() => {
-    const byStatus =
-      activeFilter === 'all'
-        ? allItems
-        : allItems.filter((item) => item.status === filterToStatus[activeFilter])
-
-    if (!keyword) {
-      return byStatus
-    }
-
-    return byStatus.filter((item) => {
-      const searchable = [item.id, item.applicant, item.catName, item.catMeta, item.phone, item.wechat]
-      return searchable.join(' ').toLowerCase().includes(keyword)
-    })
-  }, [activeFilter, allItems, keyword])
-
-  const counts = {
-    all: allItems.length,
-    pending: allItems.filter((item) => item.status === 'pending').length,
-    interview: allItems.filter((item) => item.status === 'interview').length,
-    approved: allItems.filter((item) => item.status === 'approved').length,
-    rejected: allItems.filter((item) => item.status === 'rejected').length,
-  }
+    if (query.error instanceof ApiNotFoundError) return fallbackItems
+    return normalizeItems(query.data?.data, 'pending')
+  }, [query.data?.data, query.error])
+  const items = allItems
 
   const handleFilterWheel = (event: WheelEvent<HTMLDivElement>) => {
     if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return
@@ -252,13 +179,8 @@ export function MobileLayout() {
   const scrollFilters = (direction: -1 | 1) => {
     filterRowRef.current?.scrollBy({ left: direction * 132, behavior: 'smooth' })
   }
-  const isLoading = pendingQuery.isLoading || interviewQuery.isLoading || approvedQuery.isLoading || rejectedQuery.isLoading
-  const allStatusNotFound =
-    pendingQuery.error instanceof ApiNotFoundError &&
-    interviewQuery.error instanceof ApiNotFoundError &&
-    approvedQuery.error instanceof ApiNotFoundError &&
-    rejectedQuery.error instanceof ApiNotFoundError
-  const queryError = allStatusNotFound ? null : pendingQuery.error || interviewQuery.error || approvedQuery.error || rejectedQuery.error
+  const isLoading = query.isLoading
+  const queryError = query.error instanceof ApiNotFoundError ? null : query.error
 
   return (
     <div className="pb-8">
@@ -292,23 +214,25 @@ export function MobileLayout() {
           </button>
           <div ref={filterRowRef} className="chip-row min-w-0 flex-1 gap-2 pb-2" onWheel={handleFilterWheel}>
             {[
-              ['all', '全部申请', counts.all],
-              ['pending', '待处理', counts.pending],
-              ['interview', '待面谈', counts.interview],
-              ['approved', '通过', counts.approved],
-              ['rejected', '拒绝', counts.rejected],
-            ].map(([key, label, count]) => (
+              ['all', '全部申请'],
+              ['pending', '待处理'],
+              ['interview', '待面谈'],
+              ['approved', '通过'],
+              ['rejected', '拒绝'],
+              ['completed', '已完成'],
+              ['cancelled', '已取消'],
+            ].map(([key, label]) => (
               <button
                 key={String(key)}
+                aria-pressed={activeFilter === key}
                 className={clsx(
-                  'w-[108px] shrink-0 whitespace-nowrap rounded-xl border px-3 py-2 text-left shadow-[0_4px_10px_rgba(0,0,0,0.02)]',
+                  'shrink-0 whitespace-nowrap rounded-xl border px-3 py-2 text-sm shadow-[0_4px_10px_rgba(0,0,0,0.02)]',
                   activeFilter === key ? 'border-transparent bg-[#66bb6a] text-white' : 'border-black/[0.03] bg-white text-[#2c3e50]',
                 )}
                 onClick={() => setActiveFilter(key as FilterKey)}
                 type="button"
               >
-                <span className="block text-[18px] font-extrabold leading-none">{count as number}</span>
-                <span className="mt-0.5 block text-[11px]">{label as string}</span>
+                {label}
               </button>
             ))}
           </div>
@@ -380,6 +304,7 @@ export function MobileLayout() {
             ))}
           </div>
         </QueryState>
+        <ListPagination data={query.data?.data} page={filters.page} onChange={filters.setPage} loading={query.isFetching} />
       </div>
     </div>
   )

@@ -3,26 +3,21 @@ import { useNavigate } from 'react-router-dom'
 
 import { catApi } from '@pc/lib/api'
 import { cn } from '@pc/lib/utils'
-import { CampusMap, type LeaderboardType, type LeaderboardItem } from '@pc/types'
+import { CampusMap, type LeaderboardItem } from '@pc/types'
+import { leaderboardTabs, useLeaderboardFilters } from '@shared/useLeaderboardFilters'
 import { Button } from '@pc/components/ui/button'
 import { Crown, MapPin, Info, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react'
 
 
 export function DesktopLayout() {
   const navigate = useNavigate()
-  const [currentTab, setCurrentTab] = useState<LeaderboardType>('popularity')
+  const { tab, setTab: setCurrentTab, showAll, setShowAll } = useLeaderboardFilters()
+  const currentTab = tab.key
   const [list, setList] = useState<LeaderboardItem[]>([])
-  const [, setLoading] = useState(false)
-  const [showAll, setShowAll] = useState(false) // 是否显示完整排名
   const defaultShowCount = 17 // 默认显示的剩余数量（第4-20名）
 
   // 榜单选项配置
-  const tabs: { key: LeaderboardType; label: string }[] = [
-    { key: 'popularity', label: '人气榜' },
-    { key: 'appearance', label: '颜值榜' },
-    { key: 'gluttony', label: '吃货榜' },
-    { key: 'fight', label: '战力榜' }
-  ]
+  const tabs = leaderboardTabs
 
   // --- 数据计算  ---
   const topThree = (() => {
@@ -66,24 +61,15 @@ export function DesktopLayout() {
     }
   })()
 
-  //请求函数
-  const fetchData = async () => {
-    setLoading(true)
-    try {
-      setList(await catApi.getLeaderboard(currentTab, 100))
-    } catch (error) {
-      console.error('请求失败:', error)
-      setList([])
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // 切换 Tab 时自动刷新并重置显示状态；挂载时执行首次请求（对应 onMounted + watch）
   useEffect(() => {
-    setShowAll(false)
-    void fetchData()
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- 意图为仅挂载执行 / 模拟 Vue watch
+    let active = true
+    setList([])
+    void catApi.getLeaderboard(currentTab, 100).then((items) => {
+      if (active) setList(items)
+    }).catch((error) => {
+      if (active) console.error('请求失败:', error)
+    })
+    return () => { active = false }
   }, [currentTab])
 
 
@@ -115,6 +101,7 @@ export function DesktopLayout() {
           {tabs.map((tab) => (
             <button
               key={tab.key}
+              aria-pressed={currentTab === tab.key}
               onClick={() => setCurrentTab(tab.key)}
               className={cn(
                 'px-8 py-2 rounded-full text-sm font-bold transition-all duration-300',

@@ -130,7 +130,7 @@ const normalizeAdminAdoptionPage = (
     const source = Array.isArray(page) ? { items: page } : page
     const items = source.items || source.records || source.list || source.content || []
     const total = Number(source.total ?? items.length)
-    const size = Math.max(Number(source.size ?? 10), 1)
+    const size = Math.max(Number(source.size ?? (items.length || 10)), 1)
     const current = Math.max(Number(source.current ?? source.currentPage ?? 1), 1)
     const pages = Math.max(Number(source.pages ?? source.totalPage ?? (Math.ceil(total / size) || 1)), 1)
 

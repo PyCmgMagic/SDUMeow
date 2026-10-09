@@ -10,6 +10,11 @@ import { QueryState } from '@/components/feedback/QueryState'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { asRecord, asString, toPaged } from '@/utils/format'
 import { normalizeMediaUrl } from '@/utils/media'
+import { useListFilters, ADMIN_PAGE_SIZE } from '@shared/useListFilters'
+import { ListPagination } from '@shared/ListPagination'
+import { adminUserRole } from '@shared/adminUserRole'
+import { filterPagedList } from '@shared/filterPagedList'
+import { hydrateUserRoles } from '@shared/hydrateUserRoles'
 
 type UserFilter = 'all' | 'admin' | 'user'
 type UserRole = 'admin' | 'user' | 'unknown'
@@ -77,120 +82,8 @@ function normalizeLevel(...values: unknown[]): number {
   return 0
 }
 
-function firstPresent(...values: unknown[]): unknown {
-  return values.find((value) => {
-    if (value === null || value === undefined) return false
-    return typeof value !== 'string' || value.trim().length > 0
-  })
-}
-
-function normalizePermission(value: unknown): string {
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => {
-        if (typeof item === 'number' && Number.isFinite(item)) return String(item)
-        if (typeof item === 'string') return item.trim()
-
-        const row = asRecord(item)
-        return asString(row.name || row.role || row.authority || row.permission || row.value, '').trim()
-      })
-      .filter(Boolean)
-      .join(', ')
-  }
-
-  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
-  if (typeof value === 'string') return value.trim()
-  return ''
-}
-
-function toOptionalBoolean(value: unknown): boolean | null {
-  if (typeof value === 'boolean') return value
-  if (typeof value === 'number' && Number.isFinite(value)) return value !== 0
-  if (typeof value !== 'string') return null
-
-  const normalized = value.trim().toLowerCase()
-  if (!normalized) return null
-  if (['true', '1', 'yes', 'y', 'admin'].includes(normalized)) return true
-  if (['false', '0', 'no', 'n', 'user', 'normal'].includes(normalized)) return false
-  return null
-}
-
-function resolveUserRole(permissionRaw: string, roleRaw: string, adminFlag: boolean | null): UserRole {
-  if (adminFlag === true) return 'admin'
-
-  const permission = permissionRaw.toLowerCase()
-  const role = roleRaw.toLowerCase()
-  const combinedRaw = `${permissionRaw} ${roleRaw}`
-  const combined = combinedRaw.toLowerCase()
-
-  if (
-    combined.includes('admin') ||
-    combined.includes('manager') ||
-    combined.includes('root') ||
-    combined.includes('super') ||
-    combinedRaw.includes('管理员')
-  ) {
-    return 'admin'
-  }
-  if (
-    combined.includes('user') ||
-    combined.includes('student') ||
-    combined.includes('normal') ||
-    combinedRaw.includes('普通用户')
-  ) {
-    return 'user'
-  }
-  if (/^\d+$/.test(permission)) return Number(permission) > 0 ? 'admin' : 'user'
-  if (/^\d+$/.test(role)) return Number(role) > 0 ? 'admin' : 'user'
-  if (adminFlag === false) return 'user'
-
-  return 'unknown'
-}
-
 function normalizeUserRole(row: Record<string, unknown>): UserRole {
-  const profile = asRecord(row.profile)
-  const userInfo = asRecord(row.userInfo)
-  const permission = normalizePermission(
-    firstPresent(
-      row.permission,
-      row.permissions,
-      row.auth,
-      row.authority,
-      row.authorities,
-      row.permissionLevel,
-      profile.permission,
-      profile.permissions,
-      userInfo.permission,
-      userInfo.permissions,
-    ),
-  )
-  const roleRaw = normalizePermission(
-    firstPresent(
-      row.roleName,
-      row.role,
-      row.userRole,
-      row.userType,
-      row.accountRole,
-      profile.roleName,
-      profile.role,
-      userInfo.roleName,
-      userInfo.role,
-    ),
-  )
-  const adminFlag = toOptionalBoolean(
-    firstPresent(
-      row.isAdmin,
-      row.admin,
-      row.adminFlag,
-      row.isManager,
-      row.manager,
-      row.superAdmin,
-      profile.isAdmin,
-      userInfo.isAdmin,
-    ),
-  )
-
-  return resolveUserRole(permission, roleRaw, adminFlag)
+  return adminUserRole(row)
 }
 
 function normalizeUsers(payload: unknown): AdminUserItem[] {
@@ -225,7 +118,7 @@ function normalizeUsers(payload: unknown): AdminUserItem[] {
       grade,
       level: normalizeLevel(row.level, profile.level, userInfo.level, row.lv),
       role: normalizeUserRole(row),
-      status: statusRaw === 'BANNED' || statusRaw === 'DISABLED' ? 'banned' : 'active',
+      status: row.status === 1 || row.status === '1' || statusRaw === 'BANNED' || statusRaw === 'DISABLED' ? 'banned' : 'active',
       isNew: Boolean(row.isNew),
     }
   })
@@ -308,22 +201,29 @@ function UserAvatar({ name, avatar }: UserAvatarProps) {
 
 export function MobileLayout() {
   usePageTitle('用户管理')
-  const [search, setSearch] = useState('')
-  const [activeFilter, setActiveFilter] = useState<UserFilter>('all')
+  const filters = useListFilters()
+  const search = filters.search
+  const setSearch = filters.setSearch
+  const role = filters.params.get('role') || ''
+  const activeFilter: UserFilter = role === 'admin' || role === 'user' ? role : 'all'
+  const setActiveFilter = (filter: UserFilter) => filters.update({ role: filter === 'all' ? '' : filter })
 
-  const query = useQuery({ queryKey: ['admin-users'], queryFn: getAdminUsers })
+  const query = useQuery({ refetchOnMount: 'always', queryKey: ['admin-users', filters.page, search, activeFilter], queryFn: async () => {
+    const load = async (page: number, size: number) => {
+      const response = await getAdminUsers({ page, size, search: search.trim() || undefined })
+      if (activeFilter === 'all') return response.data
+      const items = await hydrateUserRoles(toPaged<Record<string, unknown>>(response.data).items,
+        async (user) => ({ ...user, ...(await getAdminUserDetail(String(user.id ?? user.uid))).data }))
+      return { ...response.data, items }
+    }
+    if (activeFilter === 'all') return { data: await load(filters.page, ADMIN_PAGE_SIZE) }
+    return { data: await filterPagedList<Record<string, unknown>>(load, filters.page, (user) => adminUserRole(user) === activeFilter) }
+  } })
   const users = useMemo(() => normalizeUsers(query.data?.data), [query.data?.data])
 
   const preliminaryFilteredUsers = useMemo(() => {
-    const keyword = search.trim().toLowerCase()
-    const base = applyFilter(users, activeFilter)
-
-    if (!keyword) return base
-    return base.filter((item) => {
-      const target = `${item.name}${item.department}${item.grade}`.toLowerCase()
-      return target.includes(keyword)
-    })
-  }, [activeFilter, search, users])
+    return applyFilter(users, activeFilter)
+  }, [activeFilter, users])
 
   const roleUnknownIds = useMemo(() => users.filter((user) => user.role === 'unknown').map((user) => user.id), [users])
 
@@ -370,16 +270,8 @@ export function MobileLayout() {
   )
 
   const filteredUsers = useMemo(() => {
-    const keyword = search.trim().toLowerCase()
-    const base = applyFilter(enrichedUsers, activeFilter)
-
-    if (!keyword) return base
-    return base.filter((item) => {
-      const roleText = item.role === 'admin' ? '管理员' : '普通用户'
-      const target = `${item.name}${item.department}${item.grade}${roleText}`.toLowerCase()
-      return target.includes(keyword)
-    })
-  }, [activeFilter, enrichedUsers, search])
+    return applyFilter(enrichedUsers, activeFilter)
+  }, [activeFilter, enrichedUsers])
 
   const displayedUsers = filteredUsers
   const pendingRoleIds = new Set(roleUnknownIds)
@@ -387,7 +279,7 @@ export function MobileLayout() {
     activeFilter === 'admin' &&
     detailQueries.some((detailQuery, index) => pendingRoleIds.has(enrichUserIds[index]) && detailQuery.isLoading)
 
-  const totalCount = users.length
+  const totalCount = toPaged(query.data?.data).total
   const weeklyNew = users.filter((user) => user.isNew).length
 
   return (
@@ -415,7 +307,7 @@ export function MobileLayout() {
           </div>
           <div className="rounded-2xl bg-gradient-to-br from-[#059669] to-[#10b981] p-5 text-white">
             <p className="text-[32px] font-black leading-none">{weeklyNew}</p>
-            <p className="mt-1 text-[12px] text-white/90">本周新增</p>
+            <p className="mt-1 text-[12px] text-white/90">本页本周新增</p>
           </div>
         </div>
 
@@ -423,6 +315,7 @@ export function MobileLayout() {
           {filterList.map((filter) => (
             <button
               key={filter.key}
+              aria-pressed={activeFilter === filter.key}
               className={clsx(
                 'rounded-full border border-black/5 px-4 py-2 text-[13px] font-medium transition-all',
                 activeFilter === filter.key
@@ -494,6 +387,7 @@ export function MobileLayout() {
             })}
           </div>
         </QueryState>
+        <ListPagination data={query.data?.data} page={filters.page} onChange={filters.setPage} loading={query.isFetching} />
       </div>
     </div>
   )

@@ -1,4 +1,5 @@
-import { useEffect, useState, type ComponentType } from 'react'
+import { useEffect, useRef, useState, type ComponentType } from 'react'
+import { useListFilters } from '@shared/useListFilters'
 import { adminAnnouncementApi } from '@pc/lib/api'
 import {
   AnnouncementLegacyTypeMap,
@@ -107,6 +108,7 @@ const formatTime = (value?: string) => {
 }
 
 export function DesktopLayout() {
+  const filters = useListFilters(['DRAFT', 'PUBLISHED'])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -114,8 +116,10 @@ export function DesktopLayout() {
   const [items, setItems] = useState<Announcement[]>([])
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [statusFilter, setStatusFilter] = useState<'' | AnnouncementStatus>('')
+  const currentPage = filters.page
+  const setCurrentPage = filters.setPage
+  const statusFilter = filters.status as '' | AnnouncementStatus
+  const latestRequestId = useRef(0)
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingId, setEditingId] = useState('')
@@ -127,6 +131,7 @@ export function DesktopLayout() {
   const publishedCount = items.filter((item) => isPublished(item.status)).length
 
   const fetchList = async (statusOverride?: '' | AnnouncementStatus) => {
+    const requestId = ++latestRequestId.current
     setLoading(true)
     setListError('')
     try {
@@ -136,10 +141,13 @@ export function DesktopLayout() {
         status: (statusOverride ?? statusFilter) || undefined
       })
       const resolvedItems = pageItems(data)
+      if (requestId !== latestRequestId.current) return
       setItems(resolvedItems)
       setTotal(Number(data.total ?? resolvedItems.length))
       setTotalPages(Math.max(Number(data.totalPage ?? data.pages ?? 1), 1))
+      if (currentPage > Math.max(Number(data.totalPage ?? data.pages ?? 1), 1)) setCurrentPage(Math.max(Number(data.totalPage ?? data.pages ?? 1), 1))
     } catch (error) {
+      if (requestId !== latestRequestId.current) return
       console.error('Failed to load announcements', error)
       setItems([])
       setTotal(0)
@@ -147,7 +155,7 @@ export function DesktopLayout() {
       setListError('公告列表暂时无法加载，请稍后重试。')
       toast.error('获取公告列表失败')
     } finally {
-      setLoading(false)
+      if (requestId === latestRequestId.current) setLoading(false)
     }
   }
 
@@ -224,16 +232,15 @@ export function DesktopLayout() {
   }
 
   const onStatusFilterChange = (value: '' | AnnouncementStatus) => {
-    setStatusFilter(value)
-    if (currentPage === 1) void fetchList(value)
-    else setCurrentPage(1)
+    filters.setStatus(value)
   }
 
   // 对应 Vue 的 watch(currentPage) + onMounted：挂载与翻页时拉取列表。
   useEffect(() => {
     void fetchList()
+    return () => { latestRequestId.current += 1 }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage])
+  }, [currentPage, statusFilter])
 
   return (
     <div className="flex flex-col gap-6">

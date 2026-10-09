@@ -52,16 +52,22 @@ import {
   XCircle
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { Input } from '@pc/components/ui/input'
+import { useListFilters } from '@shared/useListFilters'
+import { filterPagedList } from '@shared/filterPagedList'
 
 export function DesktopLayout() {
+  const filters = useListFilters(['0', '1', '2', '3', '4', '5'])
   const pageSize = 10
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [adoptionList, setAdoptionList] = useState<AdoptionItem[]>([])
-  const [currentPage, setCurrentPage] = useState(1)
+  const currentPage = filters.page
+  const setCurrentPage = filters.setPage
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
-  const [selectedStatus, setSelectedStatus] = useState<AdminAdoptionStatus | ''>('')
+  const selectedStatus = filters.status === '' ? '' : Number(filters.status) as AdminAdoptionStatus
+  const setSelectedStatus = (status: AdminAdoptionStatus | '') => filters.setStatus(String(status))
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
   const [auditDialogOpen, setAuditDialogOpen] = useState(false)
   const [selectedDetail, setSelectedDetail] = useState<AdoptionItem | null>(null)
@@ -205,16 +211,17 @@ export function DesktopLayout() {
     setLoadError('')
 
     try {
-      const response = await adoptionApi.getAdoptionList({
-        page: currentPage,
-        size: pageSize,
-        ...(selectedStatus !== '' ? { status: selectedStatus } : {})
-      })
+      const load = (page: number, size: number) => adoptionApi.getAdoptionList({ page, size, ...(selectedStatus !== '' ? { status: selectedStatus } : {}) })
+      const keyword = filters.search.trim().toLowerCase()
+      const response = keyword ? await filterPagedList<AdoptionItem>(load, currentPage, (item) =>
+        [item.id, item.userName, item.catName, item.contact?.phone, item.contact?.wechat].join(' ').toLowerCase().includes(keyword),
+      ) : await load(currentPage, pageSize)
       if (requestId !== latestRequestIdRef.current) return
 
       setAdoptionList(response.items || [])
       setTotal(Number(response.total || 0))
       setTotalPages(Math.max(Number(response.pages || 1), 1))
+      if (currentPage > Math.max(Number(response.pages || 1), 1)) setCurrentPage(Math.max(Number(response.pages || 1), 1))
     } catch (error) {
       if (requestId !== latestRequestIdRef.current) return
       setAdoptionList([])
@@ -298,31 +305,11 @@ export function DesktopLayout() {
     }
   }
 
-  const skipSelectedStatusWatch = useRef(true)
-  useEffect(() => {
-    if (skipSelectedStatusWatch.current) {
-      skipSelectedStatusWatch.current = false
-      return
-    }
-    if (currentPage === 1) void fetchList()
-    else setCurrentPage(1)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedStatus])
-
-  const skipCurrentPageWatch = useRef(true)
-  useEffect(() => {
-    if (skipCurrentPageWatch.current) {
-      skipCurrentPageWatch.current = false
-      return
-    }
-    void fetchList()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage])
-
   useEffect(() => {
     void fetchList()
+    return () => { latestRequestIdRef.current += 1 }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [currentPage, selectedStatus, filters.search])
 
   const detailStatusInfo = statusInfo(selectedDetail?.status)
   const DetailStatusIcon = detailStatusInfo.icon
@@ -347,6 +334,7 @@ export function DesktopLayout() {
       />
 
       <AdminPanel>
+        <div className="px-4 pt-4"><Input aria-label="搜索领养申请" placeholder="搜索申请单号、姓名或猫咪..." value={filters.search} onChange={(event) => filters.setSearch(event.target.value)} /></div>
         <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
           <AdminStatusTabs
             value={selectedStatus}

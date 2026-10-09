@@ -1,6 +1,6 @@
 import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, PlusOutlined, PushpinOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, Modal, message } from 'antd'
+import { Button, Modal, Select, message } from 'antd'
 import clsx from 'clsx'
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -13,8 +13,10 @@ import { QueryState } from '@/components/feedback/QueryState'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { getAnnouncementTypeLabel, getAnnouncementTypeOptions } from '@/utils/announcementTypes'
 import { asRecord, asString, formatTimestampText, toPaged } from '@/utils/format'
+import { useListFilters, ADMIN_PAGE_SIZE } from '@shared/useListFilters'
+import { ListPagination } from '@shared/ListPagination'
 
-type NoticeStatus = 'published' | 'deleted'
+type NoticeStatus = 'draft' | 'published' | 'deleted'
 
 type NoticeItem = {
   id: string
@@ -61,7 +63,7 @@ function normalizeNoticeList(payload: unknown, typeOptions = getAnnouncementType
       content: asString(row.content || row.summary || row.description, '暂无公告内容'),
       date: formatNoticeDate(row.publishTime || row.publishDate || row.createdAt || row.createTime || row.updatedAt),
       type: getAnnouncementTypeLabel(row.type ?? row.category, typeOptions),
-      status: deleted ? 'deleted' : 'published',
+      status: deleted ? 'deleted' : ['DRAFT', '0'].includes(String(row.status).toUpperCase()) ? 'draft' : 'published',
       pinned: normalizePinned(row),
       deleted,
     }
@@ -73,10 +75,12 @@ export function MobileLayout() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [deletingId, setDeletingId] = useState('')
+  const filters = useListFilters(['DRAFT', 'PUBLISHED'])
 
   const query = useQuery({
-    queryKey: ['admin-announcements', 'list'],
-    queryFn: () => getAdminAnnouncements({ page: 1, size: 100, pageSize: 100 }),
+    refetchOnMount: 'always',
+    queryKey: ['admin-announcements', 'list', filters.page, filters.status],
+    queryFn: () => getAdminAnnouncements({ page: filters.page, size: ADMIN_PAGE_SIZE, pageSize: ADMIN_PAGE_SIZE, status: filters.status || undefined }),
   })
   const typesQuery = useQuery({
     queryKey: ['type', 'announcement-types'],
@@ -132,6 +136,8 @@ export function MobileLayout() {
       </section>
 
       <div className="h5-content pt-0">
+        <Select aria-label="公告状态筛选" className="mb-4 w-full" value={filters.status} onChange={filters.setStatus}
+          options={[{ label: '全部公告', value: '' }, { label: '草稿', value: 'DRAFT' }, { label: '已发布', value: 'PUBLISHED' }]} />
         <QueryState
           error={query.error instanceof ApiNotFoundError ? null : query.error}
           isEmpty={!query.isLoading && !query.error && notices.length === 0}
@@ -164,7 +170,7 @@ export function MobileLayout() {
                 </p>
 
                 <div className="mt-8 flex items-center border-t border-dashed border-[#edf2f7] pt-4">
-                  <span className="text-[11px] font-semibold text-[#cbd5e1]">{notice.deleted ? '已删除' : '已发布'}</span>
+                  <span className="text-[11px] font-semibold text-[#cbd5e1]">{notice.deleted ? '已删除' : notice.status === 'draft' ? '草稿' : '已发布'}</span>
                   <div className="ml-auto flex items-center gap-4">
                     <Link
                       className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f8fafc] text-[#0f172a]"
@@ -191,6 +197,7 @@ export function MobileLayout() {
             ))}
           </div>
         </QueryState>
+        <ListPagination data={query.data?.data} page={filters.page} onChange={filters.setPage} loading={query.isFetching} />
 
         {query.error instanceof ApiNotFoundError ? (
           <div className="mt-4">

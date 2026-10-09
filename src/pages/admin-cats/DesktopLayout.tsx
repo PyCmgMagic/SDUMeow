@@ -39,6 +39,7 @@ const positiveInteger = (value: unknown, fallback = 1) => {
 }
 
 const enumFilter = <T extends number>(value: unknown, allowed: readonly T[]): T | null => {
+  if (value === null || value === undefined || value === '') return null
   const numeric = Number(value)
   return allowed.includes(numeric as T) ? numeric as T : null
 }
