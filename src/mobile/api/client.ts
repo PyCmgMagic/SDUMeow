@@ -108,7 +108,8 @@ function promptRelogin(scope: SessionScope) {
   clearSession(scope)
   const loginPath = scope === 'admin' ? '/admin/login' : '/login'
   if (!isAppPath(window.location.pathname, loginPath)) {
-    window.location.replace(withAppBasePath(loginPath))
+    const redirect = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    window.location.replace(`${withAppBasePath(loginPath)}?${new URLSearchParams({ expired: '1', redirect })}`)
   }
 }
 
@@ -151,12 +152,7 @@ httpClient.interceptors.response.use(
     }
 
     if (error?.response?.status === 401 && activeToken) {
-      markLoginNotice()
-      clearSession(scope)
-      const loginPath = scope === 'admin' ? '/admin/login' : '/login'
-      if (!isAppPath(window.location.pathname, loginPath)) {
-        window.location.replace(withAppBasePath(loginPath))
-      }
+      promptRelogin(scope)
     }
 
     if (activeToken && shouldPromptRelogin(error)) {

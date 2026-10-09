@@ -29,8 +29,11 @@ export function RequireRole({ allow, children }: RequireRoleProps) {
   const { role, token, hydrated } = useAuth()
   const sessionReady = useSessionReady()
   const location = useLocation()
+  const loginPath = allow.includes(UserRole.Admin) && !allow.includes(UserRole.User) ? '/admin/login' : '/login'
+  const from = `${location.pathname}${location.search}${location.hash}`
+  const loginTarget = `${loginPath}?${new URLSearchParams({ redirect: from })}`
   const loginState = {
-    from: `${location.pathname}${location.search}`,
+    from,
     loginNotice: '请登录使用功能',
   }
 
@@ -44,15 +47,15 @@ export function RequireRole({ allow, children }: RequireRoleProps) {
   const guardToken = role === UserRole.Admin ? storage.getToken('admin') : token
 
   if (!hasValidSession(role, guardToken)) {
-    return <Navigate replace state={loginState} to="/login" />
+    return <Navigate replace state={loginState} to={loginTarget} />
   }
 
   if (!role) {
-    return <Navigate replace state={loginState} to="/login" />
+    return <Navigate replace state={loginState} to={loginTarget} />
   }
 
   if (!canAccess(role, allow)) {
-    return <Navigate replace state={loginState} to="/login" />
+    return <Navigate replace state={loginState} to={loginTarget} />
   }
 
   return <>{children}</>

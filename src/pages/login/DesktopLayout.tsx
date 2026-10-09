@@ -9,6 +9,7 @@ import { useAuthQueryFeedback } from '@pc/composables/useAuthQueryFeedback'
 import { useUserStore } from '@pc/stores/user'
 import { getSduAuthUrl, setAuthIntent } from '@pc/lib/auth'
 import logo from '@/assets/猫猫图鉴-logo.png'
+import { safeAuthRedirect } from '@shared/authRedirect'
 
 export function DesktopLayout() {
   const location = useLocation()
@@ -33,7 +34,7 @@ export function DesktopLayout() {
 
   const safeRedirect = () => {
     const redirect = new URLSearchParams(location.search).get('redirect') ?? '/'
-    return redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/'
+    return safeAuthRedirect(redirect)
   }
 
   const handleSduLogin = () => {
@@ -60,7 +61,10 @@ export function DesktopLayout() {
     }
   }
 
-  const goVisitor = () => navigate('/')
+  const goVisitor = () => {
+    useUserStore.getState().enterGuest()
+    navigate('/')
+  }
   const goAdminLogin = () => {
     const query = new URLSearchParams({ redirect: '/admin/dashboard' })
     navigate(`/admin/login?${query.toString()}`)

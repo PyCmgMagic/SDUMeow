@@ -10,6 +10,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { asNumber, asRecord, asString, toPaged } from '@/utils/format'
 import { normalizeMediaUrl } from '@/utils/media'
+import { useCheckinStore } from '@shared/checkin.store'
 
 const campusCodeLabelMap: Record<string, string> = {
   '0': '中心校区',
@@ -35,21 +36,11 @@ function normalizeCampus(value: unknown): string {
   return ''
 }
 
-const AUTO_CHECKIN_TOTAL_DAYS_STORAGE_KEY = 'user:auto-checkin:total-days'
-
-function readStoredCheckinTotalDays(): number | null {
-  const raw = window.localStorage.getItem(AUTO_CHECKIN_TOTAL_DAYS_STORAGE_KEY)
-  if (!raw) return null
-  const value = Number(raw)
-  if (!Number.isFinite(value) || value < 0) return null
-  return Math.floor(value)
-}
-
 export function MobileLayout() {
   usePageTitle('我的')
   const navigate = useNavigate()
   const { logout } = useAuth()
-  const checkinTotalDays = readStoredCheckinTotalDays()
+  const checkinTotalDays = useCheckinStore((state) => state.result?.totalDays)
   const query = useQuery({ queryKey: ['me'], queryFn: getMe })
   const myAdoptionsQuery = useQuery({
     queryKey: ['my-adoptions', 'me-summary'],

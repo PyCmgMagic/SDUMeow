@@ -17,7 +17,9 @@ import { RequireRole } from '@/router/guards'
 import { AppRootLayout } from '@/layouts/AppRootLayout'
 import { AdminLayout as MobileAdminLayout } from '@/layouts/AdminLayout'
 import { UserRole } from '@/types/enums'
-import { isMobileViewport, useIsMobile } from '@shared/device'
+import { useIsMobile } from '@shared/device'
+import { safeAuthRedirect } from '@shared/authRedirect'
+import { STORAGE_KEYS } from '@/utils/constants'
 
 /* ------------------------------------------------------------------ */
 /* 路由辅助 */
@@ -36,21 +38,24 @@ function Adaptive({ desktop, mobile }: { desktop: React.ReactNode; mobile: React
 }
 
 /* ------------------------------------------------------------------ */
-/* 统一认证回调（桌面端分支；移动端由 AppRootLayout 的 AuthCallbackHandler 处理） */
+/* 统一认证回调：两端共用路由 loader，视口变化不会中断令牌交换。 */
 /* ------------------------------------------------------------------ */
 
-const getSafeRedirect = (value: unknown, fallback = '/') => {
-  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) {
-    return fallback
-  }
-  return value
-}
-
-async function desktopEntryLoader({ request }: LoaderFunctionArgs) {
-  // 移动端的回调走 AppRootLayout 内的 AuthCallbackHandler，保留两端各自原有的处理细节。
-  if (isMobileViewport()) return null
-
+async function authEntryLoader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url)
+  if (!url.searchParams.has('login_code') && !url.searchParams.has('meow_token')) return null
+  const legacyMode = url.searchParams.get('auth_mode') || url.searchParams.get('login_mode')
+    || url.searchParams.get('meow_role') || sessionStorage.getItem(STORAGE_KEYS.authLoginMode)
+    || localStorage.getItem(STORAGE_KEYS.authLoginMode)
+  const authIntent = peekAuthIntent() || (legacyMode === 'admin' ? 'admin' : 'user')
+  const storedRedirect = sessionStorage.getItem('authRedirect')
+  const pendingRedirect = safeAuthRedirect(storedRedirect, authIntent === 'admin' ? '/admin/dashboard' : '/')
+  const clearPendingAuth = () => {
+    sessionStorage.removeItem('authRedirect')
+    sessionStorage.removeItem(STORAGE_KEYS.authLoginMode)
+    localStorage.removeItem(STORAGE_KEYS.authLoginMode)
+    clearAuthIntent()
+  }
 
   // 新契约（/auth/exchange 描述）：回调只携带一次性 login_code，用它换取令牌。
   const loginCode = url.searchParams.get('login_code')
@@ -72,18 +77,17 @@ async function desktopEntryLoader({ request }: LoaderFunctionArgs) {
         throw new Error(data.msg || data.message || '统一认证登录失败')
       }
       if (!accessToken) throw new Error('统一认证未返回有效令牌')
-      // 与旧令牌回调共用同一段落处理；refreshToken 缺省时复用 accessToken。
       url.searchParams.set('meow_token', accessToken)
       const refreshToken = data.data?.refreshToken
       if (refreshToken) url.searchParams.set('meow_refresh_token', refreshToken)
       else url.searchParams.delete('meow_refresh_token')
     } catch (error) {
       console.error('SDU authentication exchange failed', error)
-      sessionStorage.removeItem('authRedirect')
-      clearAuthIntent()
+      clearPendingAuth()
       const message = error instanceof Error ? error.message : ''
-      const query = new URLSearchParams({ authError: 'sdu', redirect: '/' })
-      return redirect(`/login?${query.toString()}${message ? `&exchangeError=${encodeURIComponent(message)}` : ''}`)
+      const query = new URLSearchParams({ authError: 'sdu', redirect: pendingRedirect })
+      const loginPath = authIntent === 'admin' ? '/admin/login' : '/login'
+      return redirect(`${loginPath}?${query.toString()}${message ? `&exchangeError=${encodeURIComponent(message)}` : ''}`)
     }
   }
 
@@ -96,16 +100,13 @@ async function desktopEntryLoader({ request }: LoaderFunctionArgs) {
   cleanQuery.delete('meow_token')
   cleanQuery.delete('meow_refresh_token')
   cleanQuery.delete('login_code')
+  cleanQuery.delete('auth_mode')
+  cleanQuery.delete('login_mode')
+  cleanQuery.delete('meow_role')
 
-  const storedRedirect = sessionStorage.getItem('authRedirect')
-  const authIntent = peekAuthIntent()
   const tokenIsAdmin = isAdminAuthToken(accessToken)
-  const pendingRedirect = getSafeRedirect(
-    storedRedirect,
-    tokenIsAdmin || authIntent === 'admin' ? '/admin/dashboard' : '/',
-  )
   const currentPath = url.pathname
-  const callbackTarget = currentPath === '/' ? pendingRedirect : currentPath
+  const callbackTarget = ['/', '/login', '/admin/login'].includes(currentPath) ? pendingRedirect : currentPath
   const isAdminAuthentication =
     tokenIsAdmin
     || authIntent === 'admin'
@@ -114,8 +115,8 @@ async function desktopEntryLoader({ request }: LoaderFunctionArgs) {
   const resolvedPath = isAdminAuthentication
     ? (callbackTarget.startsWith('/admin') ? callbackTarget : '/admin/dashboard')
     : callbackTarget
-  const cleanTargetQuery = resolvedPath === currentPath ? `?${cleanQuery.toString()}` : ''
-  const cleanTargetHash = resolvedPath === currentPath ? url.hash : ''
+  const cleanTargetQuery = resolvedPath === currentPath && cleanQuery.size ? `?${cleanQuery.toString()}` : ''
+  const cleanTargetHash = resolvedPath === currentPath ? url.hash || window.location.hash : ''
 
   try {
     await useUserStore.getState().completeSduLogin(
@@ -123,15 +124,13 @@ async function desktopEntryLoader({ request }: LoaderFunctionArgs) {
       refreshToken,
       isAdminAuthentication ? 'admin' : 'user',
     )
-    sessionStorage.removeItem('authRedirect')
-    clearAuthIntent()
+    clearPendingAuth()
     const target = `${resolvedPath}${cleanTargetQuery}${cleanTargetHash}`
     window.history.replaceState(window.history.state, '', target)
     return redirect(target)
   } catch (error) {
     console.error('SDU authentication callback failed', error)
-    sessionStorage.removeItem('authRedirect')
-    clearAuthIntent()
+    clearPendingAuth()
     const loginPath = isAdminAuthentication ? '/admin/login' : '/login'
     const message = error instanceof Error ? error.message : ''
     const authError = /权限|forbidden|not[_ -]?admin|管理员会话|用户会话/i.test(message)
@@ -193,7 +192,7 @@ export const router = createBrowserRouter(
     {
       path: '/',
       element: <UnifiedRoot />,
-      loader: desktopEntryLoader,
+      loader: authEntryLoader,
       children: [
         {
           index: true,

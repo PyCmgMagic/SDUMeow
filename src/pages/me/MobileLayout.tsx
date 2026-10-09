@@ -10,6 +10,7 @@ import { getMe } from '@/api/endpoints/user'
 import { QueryState } from '@/components/feedback/QueryState'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { asNumber, asRecord, asString, formatTimestampText, toPaged } from '@/utils/format'
+import { useCheckinStore } from '@shared/checkin.store'
 
 type StatusKey = 'pending' | 'interview' | 'approved' | 'rejected'
 
@@ -123,21 +124,11 @@ function normalizeRecord(item: unknown, index: number, fallbackStatus: StatusKey
   }
 }
 
-const AUTO_CHECKIN_TOTAL_DAYS_STORAGE_KEY = 'user:auto-checkin:total-days'
-
-function readStoredCheckinTotalDays(): number | null {
-  const raw = window.localStorage.getItem(AUTO_CHECKIN_TOTAL_DAYS_STORAGE_KEY)
-  if (!raw) return null
-  const value = Number(raw)
-  if (!Number.isFinite(value) || value < 0) return null
-  return Math.floor(value)
-}
-
 export function MobileLayout() {
   usePageTitle('我的申请')
   const navigate = useNavigate()
   const [active, setActive] = useState<StatusKey>('pending')
-  const checkinTotalDays = readStoredCheckinTotalDays()
+  const checkinTotalDays = useCheckinStore((state) => state.result?.totalDays)
   const meQuery = useQuery({
     queryKey: ['me'],
     queryFn: getMe,

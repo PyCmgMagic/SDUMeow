@@ -21,6 +21,7 @@ page.on('pageerror', (error) => errors.push(error.message))
 page.on('console', (message) => { if (message.type() === 'error') { consoleErrors.push(message.text()); console.error('console:', message.text()) } })
 page.on('requestfailed', (request) => console.error('request:', request.url(), request.failure()?.errorText))
 let refreshCalls = 0
+let checkinCalls = 0
 await context.route('**/api/**', async (route) => {
   if (!new URL(route.request().url()).pathname.startsWith('/api/')) return route.continue()
   const path = new URL(route.request().url()).pathname.replace('/api', '')
@@ -30,7 +31,7 @@ await context.route('**/api/**', async (route) => {
   const account = authorization.includes(token('B')) ? 'B' : 'A'
   let data = { items: [], total: 0, totalPage: 1 }
   if (path === '/users/me') data = { uid: account === 'A' ? 1 : 2, nickname: `账号${account}`, campus: 5, level: 1, currency: 20, contact: { phone: '13800000000', wechat: 'test' } }
-  else if (path === '/users/me/checkin') data = { totalDays: 3, continuousDays: 2, todayChecked: true }
+  else if (path === '/users/me/checkin') { checkinCalls += 1; data = { totalDays: 3, continuousDays: 2, todayChecked: false, rewards: { currency: 5, experience: 10 } } }
   else if (path === '/users/refresh') { refreshCalls += 1; data = { accessToken: token('A'), refreshToken: 'refresh-A' } }
   else if (path === '/cats') data = { items: cats, total: 60, totalPage: 3, size: 20 }
   else if (path === '/cats/7') data = cats[0]
@@ -120,6 +121,9 @@ try {
   assert.match(page.url(), /color=1/)
   assert.match(page.url(), /page=2/)
   console.log('PASS 首页筛选、页码与登录状态接续')
+  assert.equal(checkinCalls, 1)
+  assert.equal(await page.getByRole('button', { name: '今日已签到', exact: true }).isDisabled(), true)
+  console.log('PASS 签到只请求一次，切回PC保留结果且禁用重复签到')
 
   for (const path of ['/notifications', '/my-adoptions', '/my-sos', '/checkin-history', '/announcements', '/profile', '/team']) {
     await navigate(path)
@@ -131,6 +135,8 @@ try {
     if (path === '/profile') await page.screenshot({ path: join(output, 'profile-desktop.png'), fullPage: true })
   }
   console.log('PASS 单端页面切换保留业务地址')
+  assert.equal(checkinCalls, 1)
+  console.log('PASS 换页面和反复跨端切换不重复签到')
   assert.equal(await page.evaluate(async () => {
     const { useNotificationStore } = await import('/src/pc/stores/notifications.ts')
     await useNotificationStore.getState().fetchPreview()
@@ -164,6 +170,7 @@ try {
   }, token('B'))
   await navigate('/publish?catId=7')
   assert.equal(await value('#moment-content'), '')
+  await page.waitForFunction(async () => { const { useAuthStore } = await import('/src/shared/auth.store.ts'); return useAuthStore.getState().userInfo?.nickname === '账号B' })
   assert.equal(await page.evaluate(async () => { const { useAuthStore } = await import('/src/shared/auth.store.ts'); return useAuthStore.getState().userInfo.nickname }), '账号B')
   console.log('PASS 换号不会显示上一账号资料或草稿')
 

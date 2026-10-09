@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@pc/components/ui/button';
-import { catApi, typeApi, userApi } from '@pc/lib/api';
+import { catApi, typeApi } from '@pc/lib/api';
 import { useUserStore } from '@pc/stores/user';
-import type { Campus, CatListItem, CheckinResult, TypeOption } from '@pc/types';
+import type { Campus, CatListItem, TypeOption } from '@pc/types';
 import { toast } from '@pc/lib/toast'
 import {
   Pagination,
@@ -18,7 +18,7 @@ import { withoutAppBasePath } from '@pc/lib/appPath'
 import { cn } from '@pc/lib/utils'
 import { campusOptions } from '@shared/campus.store'
 import { useHomeFilters } from '@shared/useHomeFilters'
-import { queryClient } from '@shared/queryClient'
+import { checkinOnce, useCheckinStore } from '@shared/checkin.store'
 
 import { StatsBanner } from '@pc/components/StatsBanner';
 import { ShortcutGrid } from '@pc/components/ShortcutGrid';
@@ -40,8 +40,9 @@ const navigate = useNavigate()
 const filters = useHomeFilters()
 
 // 签到相关
-const [checkinLoading, setCheckinLoading] = useState(false)
-const [checkinResult, setCheckinResult] = useState<CheckinResult | null>(null)
+const checkinLoading = useCheckinStore((state) => state.loading)
+const checkinResult = useCheckinStore((state) => state.result)
+const checkedToday = useCheckinStore((state) => state.completedOn === new Date().toLocaleDateString('en-CA'))
 
 // 执行签到
 const handleCheckin = async () => {
@@ -50,22 +51,15 @@ const handleCheckin = async () => {
     navigate('/login')
     return
   }
-  setCheckinLoading(true)
   try {
-    const res = await userApi.checkin()
-    setCheckinResult(res)
+    const res = await checkinOnce()
     if (res?.todayChecked) {
       toast.info('今天已经签过到啦~')
     } else {
       toast.success(`签到成功！获得 ${res?.rewards?.currency || 0} 小鱼干，${res?.rewards?.experience || 0} 经验值`)
-      // 刷新用户信息以更新小鱼干余额
-      useUserStore.getState().fetchUserInfo()
-      void queryClient.invalidateQueries({ queryKey: ['me'] })
     }
   } catch (error) {
     toast.error(error instanceof Error ? error.message : '签到失败，请稍后重试')
-  } finally {
-    setCheckinLoading(false)
   }
 }
 
@@ -226,11 +220,11 @@ return (
           {/* 签到按钮 */}
           <Button
             onClick={() => void handleCheckin()}
-            disabled={checkinLoading || checkinResult?.todayChecked}
+            disabled={checkinLoading || checkedToday}
             className="w-full bg-white text-[#FF9F1C] hover:bg-white/90 font-bold rounded-xl py-3 shadow-sm flex items-center justify-center gap-2"
           >
             <Gift className="w-5 h-5" />
-            {checkinLoading ? '签到中...' : (checkinResult?.todayChecked ? '今日已签到' : '立即签到')}
+            {checkinLoading ? '签到中...' : (checkedToday ? '今日已签到' : '立即签到')}
           </Button>
 
           {/* 查看签到记录按钮 */}

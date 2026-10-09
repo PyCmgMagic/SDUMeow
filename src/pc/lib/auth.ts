@@ -6,6 +6,7 @@ import {
   writeSession,
 } from '@shared/session'
 import { getJwtPayload } from '@shared/jwt'
+import { safeAuthRedirect } from '@shared/authRedirect'
 
 // Token 读写已统一到 @shared/session：桌面端与移动端共享同一份会话，
 // 旧的 token/refreshToken/adminToken key 在读取时自动兼容迁移。
@@ -44,21 +45,23 @@ export type AuthIntent = 'user' | 'admin'
 export const setAuthIntent = (intent: AuthIntent, redirect?: string) => {
   const fallback = intent === 'admin' ? '/admin/dashboard' : '/'
   const candidate = typeof redirect === 'string' ? redirect : fallback
-  const safeRedirect = candidate.startsWith('/') && !candidate.startsWith('//') ? candidate : fallback
+  const safeRedirect = safeAuthRedirect(candidate, fallback)
   const resolvedRedirect = intent === 'admin' && !safeRedirect.startsWith('/admin')
     ? fallback
     : safeRedirect
 
   sessionStorage.setItem('authRedirect', resolvedRedirect)
+  sessionStorage.setItem(AUTH_INTENT_KEY, intent)
   localStorage.setItem(AUTH_INTENT_KEY, intent)
 }
 
 export const peekAuthIntent = (): AuthIntent | '' => {
-  const value = localStorage.getItem(AUTH_INTENT_KEY)
+  const value = sessionStorage.getItem(AUTH_INTENT_KEY) || localStorage.getItem(AUTH_INTENT_KEY)
   return value === 'admin' || value === 'user' ? value : ''
 }
 
 export const clearAuthIntent = () => {
+  sessionStorage.removeItem(AUTH_INTENT_KEY)
   localStorage.removeItem(AUTH_INTENT_KEY)
 }
 
