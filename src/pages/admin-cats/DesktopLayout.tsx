@@ -1,3 +1,5 @@
+import { invalidateRelatedQueries } from '@shared/mutationSync'
+import { useRetainedState } from '@shared/drafts'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Cat, FileText, PenSquare, Plus, Trash2 } from 'lucide-react'
@@ -64,8 +66,8 @@ export function DesktopLayout() {
   const location = useLocation()
 
   // 编辑对话框状态
-  const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [selectedCatForEdit, setSelectedCatForEdit] = useState<AdminCatItem | null>(null)
+  const [editDialogOpen, setEditDialogOpen] = useRetainedState('admin-cats-dialog', 'editDialogOpen', false)
+  const [selectedCatForEdit, setSelectedCatForEdit] = useRetainedState<AdminCatItem | null>('admin-cats-dialog', 'selectedCatForEdit', null)
 
   // 删除确认弹窗
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -200,6 +202,7 @@ export function DesktopLayout() {
   }
 
   const handleEditSuccess = async () => {
+      invalidateRelatedQueries('cat')
     // 编辑成功后，关闭对话框并刷新列表
     setEditDialogOpen(false)
     setSelectedCatForEdit(null)
@@ -216,6 +219,7 @@ export function DesktopLayout() {
     setDeleteDialogOpen(false)
     try {
       await catApi.deleteCat(deleteCatId)
+      invalidateRelatedQueries('cat', deleteCatId)
       toast.success('删除成功')
       await fetchCats()
     } catch {
@@ -395,12 +399,12 @@ export function DesktopLayout() {
       </div>
 
       {/* 编辑猫咪对话框 */}
-      <EditCatDialog
+      {editDialogOpen && <EditCatDialog
         open={editDialogOpen}
         catData={selectedCatForEdit}
         onOpenChange={setEditDialogOpen}
         onSuccess={handleEditSuccess}
-      />
+      />}
 
       {/* 删除确认弹窗 */}
       <ConfirmDialog

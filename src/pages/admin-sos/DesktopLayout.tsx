@@ -1,3 +1,5 @@
+import { invalidateRelatedQueries } from '@shared/mutationSync'
+import { useRetainedState } from '@shared/drafts'
 import { useEffect, useRef, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -67,11 +69,11 @@ export function DesktopLayout() {
   const [totalPages, setTotalPages] = useState(1)
   const selectedStatus = filters.status as SOSStatus | ''
   const setSelectedStatus = filters.setStatus
-  const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
+  const [resolveDialogOpen, setResolveDialogOpen] = useRetainedState('admin-sos-dialog', 'resolveDialogOpen', false)
   const [resolving, setResolving] = useState(false)
-  const [selectedSOS, setSelectedSOS] = useState<SOSItem | null>(null)
+  const [selectedSOS, setSelectedSOS] = useRetainedState<SOSItem | null>('admin-sos-dialog', 'selectedSOS', null)
   const [locationOptions, setLocationOptions] = useState<TypeOption[]>([])
-  const [replyForm, setReplyForm] = useState<{ status: SOSResolutionStatus; reply: string }>({ status: 'PROCESSING', reply: '' })
+  const [replyForm, setReplyForm] = useRetainedState<{ status: SOSResolutionStatus; reply: string }>('admin-sos-dialog', 'replyForm', { status: 'PROCESSING', reply: '' })
   const latestRequestId = useRef(0)
 
   const paginationPages: Array<number | '...'> = (() => {
@@ -144,6 +146,7 @@ export function DesktopLayout() {
     setResolving(true)
     try {
       await sosApi.resolveSOS(selectedSOS.id, { status: replyForm.status, reply: replyForm.reply.trim() })
+      invalidateRelatedQueries('sos')
       toast.success(replyForm.status === 'RESOLVED' ? '救援已标记为解决' : '救援处理状态已更新')
       closeResolveDialog()
       await fetchList()

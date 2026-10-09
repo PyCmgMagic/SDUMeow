@@ -1,11 +1,12 @@
-﻿import {
+import { invalidateRelatedQueries } from '@shared/mutationSync'
+import {
   ArrowLeftOutlined,
   EllipsisOutlined,
   IdcardOutlined,
   SafetyOutlined,
   UserDeleteOutlined,
 } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Button, Modal, message } from 'antd'
 import { useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -155,7 +156,6 @@ function normalizeUserDetail(payload: unknown, id: string, fallbackStatus: UserD
 
 export function MobileLayout() {
   usePageTitle('用户详细档案')
-  const queryClient = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
   const { id = '1' } = useParams()
@@ -185,13 +185,12 @@ export function MobileLayout() {
       return result
     },
     onSuccess: () => {
+      invalidateRelatedQueries('user')
       message.success('账号状态已更新')
       setStatusOverride((current) => {
         const nextBase = current ?? detail.status
         return nextBase === 'banned' ? 'active' : 'banned'
       })
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
-      queryClient.invalidateQueries({ queryKey: ['admin-user', id] })
     },
     onError: (error) => {
       const errorMessage = error instanceof Error ? error.message : '操作失败，请稍后再试'

@@ -1,11 +1,10 @@
-﻿import { CalendarOutlined, ClockCircleOutlined, LeftOutlined, RightOutlined, SearchOutlined, UserOutlined } from '@ant-design/icons'
+import { CalendarOutlined, ClockCircleOutlined, LeftOutlined, RightOutlined, SearchOutlined, UserOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Input } from 'antd'
 import clsx from 'clsx'
 import { type WheelEvent, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 
-import { ApiNotFoundError } from '@/api/adapters/errors'
 import { getAdminAdoptions } from '@/api/endpoints/adoptions'
 import { QueryState } from '@/components/feedback/QueryState'
 import { usePageTitle } from '@/hooks/usePageTitle'
@@ -49,50 +48,6 @@ const apiStatusByStatus: Record<AdoptionStatus, string> = {
   cancelled: 'CANCELLED',
 }
 const statusOrder: AdoptionStatus[] = ['pending', 'interview', 'approved', 'rejected', 'completed', 'cancelled']
-
-const fallbackItems: AdoptionItem[] = [
-  {
-    id: '1',
-    catId: '1',
-    applicant: '张晓雨',
-    catName: '麻薯',
-    catAvatar: '',
-    catMeta: '软件园校区 · 三花 · 母',
-    status: 'pending',
-    time: '刚刚提交',
-  },
-  {
-    id: '2',
-    catId: '2',
-    applicant: '李思华',
-    catName: '少女',
-    catAvatar: '',
-    catMeta: '仁园食堂 · 玳瑁 · 母',
-    status: 'interview',
-    time: '昨天提交',
-  },
-  {
-    id: '3',
-    catId: '3',
-    applicant: '赵小凡',
-    catName: '大白',
-    catAvatar: '',
-    catMeta: '图书馆 · 纯白 · 公',
-    status: 'approved',
-    time: '3 天前申请',
-  },
-  {
-    id: '4',
-    catId: '4',
-    applicant: '孙大明',
-    catName: 'Ctrl',
-    catAvatar: '',
-    catMeta: '软件园校区 · 狸花 · 公',
-    status: 'rejected',
-    time: '已驳回',
-    reason: '住所条件不符合要求',
-  },
-]
 
 function toAdoptionStatus(value: unknown, fallbackStatus: AdoptionStatus): AdoptionStatus {
   if (value !== null && value !== undefined && value !== '' && statusOrder[Number(value)]) return statusOrder[Number(value)]
@@ -166,9 +121,8 @@ export function MobileLayout() {
     },
   })
   const allItems = useMemo(() => {
-    if (query.error instanceof ApiNotFoundError) return fallbackItems
     return normalizeItems(query.data?.data, 'pending')
-  }, [query.data?.data, query.error])
+  }, [query.data?.data])
   const items = allItems
 
   const handleFilterWheel = (event: WheelEvent<HTMLDivElement>) => {
@@ -180,7 +134,7 @@ export function MobileLayout() {
     filterRowRef.current?.scrollBy({ left: direction * 132, behavior: 'smooth' })
   }
   const isLoading = query.isLoading
-  const queryError = query.error instanceof ApiNotFoundError ? null : query.error
+  const queryError = query.error
 
   return (
     <div className="pb-8">

@@ -1,5 +1,7 @@
+import { useParams } from 'react-router-dom'
 import { MobileLayout } from './MobileLayout'
 
 export default function AdminCatEditPage() {
-  return <MobileLayout />
+  const { id } = useParams()
+  return <MobileLayout key={id} />
 }

@@ -1,7 +1,7 @@
-import { useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { Form, type FormInstance } from 'antd'
 
-export type DraftKey = 'publish' | 'sos' | 'new-cat' | 'adopt' | 'me-edit'
+export type DraftKey = 'publish' | 'sos' | 'new-cat' | 'adopt' | 'me-edit' | `admin-${string}`
 type Draft = { values: Record<string, unknown>; files: File[] }
 const drafts = new Map<DraftKey, Draft>()
 const generations = new Map<DraftKey, number>()
@@ -21,20 +21,39 @@ export function clearDraft(key: DraftKey) {
   drafts.delete(key)
 }
 
-function useDraftWriter(key: DraftKey) {
+export function useDraftWriter(key: DraftKey) {
   const [session] = useState(sessionGeneration)
-  const [generation] = useState(generations.get(key) ?? 0)
-  return (patch: Partial<Draft>) => {
+  const generationRef = useRef({ key, generation: generations.get(key) ?? 0 })
+  if (generationRef.current.key !== key) generationRef.current = { key, generation: generations.get(key) ?? 0 }
+  const generation = generationRef.current.generation
+  return useCallback((patch: Partial<Draft>) => {
     if (session !== sessionGeneration || generation !== (generations.get(key) ?? 0)) return
     const previous = readDraft(key)
     drafts.set(key, { ...previous, ...patch, values: { ...previous.values, ...patch.values } })
-  }
+  }, [session, generation, key])
+}
+
+/** 用于会因断点切换而卸载的弹窗；用户关闭或保存时，照常重置对应字段。 */
+export function useRetainedState<T>(key: DraftKey, field: string, initial: T | (() => T)): [T, Dispatch<SetStateAction<T>>] {
+  const [value, setValue] = useState<T>(() => {
+    const saved = readDraft(key).values
+    return field in saved ? saved[field] as T : typeof initial === 'function' ? (initial as () => T)() : initial
+  })
+  const current = useRef(value)
+  const write = useDraftWriter(key)
+  const update: Dispatch<SetStateAction<T>> = useCallback((next) => {
+    const resolved = typeof next === 'function' ? (next as (value: T) => T)(current.current) : next
+    current.current = resolved
+    write({ values: { [field]: resolved } })
+    setValue(resolved)
+  }, [field, write])
+  return [value, update]
 }
 
 /** 保存字段和 File 本身；预览 URL 由每次挂载的布局重新生成和释放。 */
-export function useDraftSnapshot(key: DraftKey, values: Record<string, unknown>, files?: File[]) {
+export function useDraftSnapshot(key: DraftKey, values: Record<string, unknown> | undefined, files?: File[]) {
   const write = useDraftWriter(key)
-  useLayoutEffect(() => { write({ values, ...(files ? { files } : {}) }) })
+  useLayoutEffect(() => { if (values) write({ values, ...(files ? { files } : {}) }) })
 }
 
 export function useAntdDraft<T extends object>(

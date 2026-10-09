@@ -1,5 +1,6 @@
-﻿import { ArrowLeftOutlined, CameraOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { invalidateRelatedQueries } from '@shared/mutationSync'
+import { ArrowLeftOutlined, CameraOutlined } from '@ant-design/icons'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Button, Form, Input, Modal, Select, message } from 'antd'
 import clsx from 'clsx'
 import { useEffect, useMemo, useState } from 'react'
@@ -17,6 +18,7 @@ import { QueryState } from '@/components/feedback/QueryState'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { asArray, asRecord, asString } from '@/utils/format'
 import { normalizeMediaUrl } from '@/utils/media'
+import { clearDraft, readDraft, useDraftSnapshot } from '@shared/drafts'
 
 type CatEditForm = {
   name: string
@@ -45,7 +47,6 @@ const statusOptions = [
 ]
 
 const defaultResidenceLocation = '食堂'
-const fallbackAvatarUrl = 'https://image.foofish.work/i/2026/02/25/699eecdb6731f-1772023003.png'
 
 const campusCodeToLabelMap: Record<string, string> = {
   '0': '中心校区',
@@ -91,23 +92,23 @@ type EditableCat = CatEditForm & {
 }
 
 const defaultCat: EditableCat = {
-  name: '麻薯',
+  name: '',
   color: '',
-  gender: 'FEMALE',
+  gender: 'UNKNOWN',
   campus: '5',
   location: defaultResidenceLocation,
   role: 1,
   status: 'SCHOOL',
-  neuteredType: 'EAR_CUT',
-  neuteredDate: '2023-11-13',
-  description: '麻薯非常亲人，喜欢吃罐头。进食时不喜欢被摸头，偶尔会哈气。',
+  neuteredType: 'NONE',
+  neuteredDate: '',
+  description: '',
   tags: [],
   friendlinessScore: 90,
   gluttonyScore: 95,
   fightScore: 40,
   appearanceScore: 100,
-  avatar: fallbackAvatarUrl,
-  neuteredTypeRaw: 'EAR_CUT',
+  avatar: '',
+  neuteredTypeRaw: '',
 }
 
 function firstPresent(...values: unknown[]): unknown {
@@ -254,12 +255,12 @@ function toEditableCat(item: unknown): EditableCat | null {
     description: asString(row.description || basicInfo.description || row.remark || row.note, ''),
     tags: asArray<number | string>(row.tagIds || row.tags || row.tagNames),
     friendlinessScore: normalizeScoreToHundred(
-      attributes.friendliness || row.affinityScore || row.friendliness,
+      attributes.friendliness ?? row.affinityScore ?? row.friendliness,
       defaultCat.friendlinessScore,
     ),
-    gluttonyScore: normalizeScoreToHundred(attributes.gluttony || row.healthScore || row.gluttony, defaultCat.gluttonyScore),
-    fightScore: normalizeScoreToHundred(attributes.fight || row.fightScore || row.fight, defaultCat.fightScore),
-    appearanceScore: normalizeScoreToHundred(attributes.appearance || row.appearanceScore || row.appearance, defaultCat.appearanceScore),
+    gluttonyScore: normalizeScoreToHundred(attributes.gluttony ?? row.healthScore ?? row.gluttony, defaultCat.gluttonyScore),
+    fightScore: normalizeScoreToHundred(attributes.fight ?? row.fightScore ?? row.fight, defaultCat.fightScore),
+    appearanceScore: normalizeScoreToHundred(attributes.appearance ?? row.appearanceScore ?? row.appearance, defaultCat.appearanceScore),
     avatar: normalizeMediaUrl(row.avatar || asArray<string>(row.images)[0] || row.image),
     neuteredTypeRaw: rawNeuteredType || defaultCat.neuteredTypeRaw,
   }
@@ -296,7 +297,7 @@ function toHundredScoreOrDefault(rawScore: unknown, fallback: number): number {
 
 function normalizeAvatarForSubmit(rawAvatar: string): string {
   const avatar = rawAvatar.trim()
-  if (!avatar) return fallbackAvatarUrl
+  if (!avatar) throw new Error('请上传猫咪头像')
   return avatar
 }
 
@@ -563,17 +564,26 @@ function normalizeDynamicTypeValue(value: unknown, options: DynamicTypeOption[])
 export function MobileLayout() {
   usePageTitle('编辑猫咪档案')
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const location = useLocation()
   const { id = '1' } = useParams()
   const isCreateMode = id === 'new'
   const [form] = Form.useForm<CatEditForm>()
+  const draftKey = `admin-cat-edit-${id}` as const
+  const watchedValues = Form.useWatch([], form) as CatEditForm | undefined
   const [initialized, setInitialized] = useState(false)
   const [avatarPreview, setAvatarPreview] = useState('')
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [loadedNeuteredTypeRaw, setLoadedNeuteredTypeRaw] = useState('')
   const [successModalOpen, setSuccessModalOpen] = useState(false)
+  useDraftSnapshot(draftKey, initialized && watchedValues ? { source: 'mobile', mobile: watchedValues, avatarPreview, loadedNeuteredTypeRaw } : undefined, avatarFile ? [avatarFile] : [])
   const avatarInputId = 'admin-cat-avatar-upload'
+
+  useEffect(() => {
+    if (!avatarFile) return
+    const url = URL.createObjectURL(avatarFile)
+    setAvatarPreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [avatarFile])
 
   const currentStatus = Form.useWatch('status', form)
   const selectedColor = Form.useWatch('color', form)
@@ -633,7 +643,14 @@ export function MobileLayout() {
     if (locationsQuery.isLoading) return
     if (rolesQuery.isLoading) return
 
-    const seed = isCreateMode ? defaultCat : (catFromQuery ?? catFromState ?? defaultCat)
+    const draft = readDraft(draftKey)
+    const saved = draft.values.source === 'mobile' ? draft.values.mobile as Partial<CatEditForm> : undefined
+    const pc = draft.values.pc as Record<string, unknown> | undefined
+    const fromPc = pc && draft.values.source === 'pc' ? toEditableCat({
+      ...pc, hauntLocation: pc.hauntLocation, isNeutered: pc.isNeutered,
+      attributes: Object.fromEntries(Object.entries(asRecord(pc.attributes)).map(([key, score]) => [key, Number(score) * 10])),
+    }) : null
+    const seed = { ...(isCreateMode ? defaultCat : (catFromQuery ?? catFromState ?? defaultCat)), ...(fromPc ?? {}), ...saved }
     form.setFieldsValue({
       name: seed.name,
       color: normalizeDynamicTypeValue(seed.color, colorOptions),
@@ -651,11 +668,12 @@ export function MobileLayout() {
       fightScore: seed.fightScore,
       appearanceScore: seed.appearanceScore,
     })
-    setAvatarPreview(seed.avatar)
-    setAvatarFile(null)
+    const file = draft.files[0]
+    setAvatarPreview(file ? '' : String(draft.values.avatarPreview || seed.avatar))
+    setAvatarFile(file ?? null)
     setLoadedNeuteredTypeRaw(seed.neuteredTypeRaw || '')
     setInitialized(true)
-  }, [catFromQuery, catFromState, colorOptions, colorsQuery.isLoading, detailQuery.isLoading, form, initialized, isCreateMode, locationOptions, locationsQuery.isLoading, roleOptions, rolesQuery.isLoading, tagOptions, tagsQuery.isLoading])
+  }, [catFromQuery, catFromState, colorOptions, colorsQuery.isLoading, detailQuery.isLoading, draftKey, form, initialized, isCreateMode, locationOptions, locationsQuery.isLoading, roleOptions, rolesQuery.isLoading, tagOptions, tagsQuery.isLoading])
 
   useEffect(() => {
     if (neuteredType !== 'NONE') return
@@ -672,13 +690,29 @@ export function MobileLayout() {
       const rawAvatar = avatarPreview.trim()
       const avatar = await resolveAvatarForSubmit(avatarFile, rawAvatar, targetId)
       const neuteredTypeCandidates = getNeuteredTypeCandidates(values.neuteredType, loadedNeuteredTypeRaw)
+      const draft = readDraft(draftKey).values
+      const pc = asRecord(draft.pc)
+      const galleryFiles = (draft.newImageFiles as File[] | undefined) ?? []
+      const addedKeys = galleryFiles.length ? await uploadImages(galleryFiles) : []
+      const deletedKeys = (draft.deletedImageKeys as string[] | undefined) ?? []
+      const gallery = addedKeys.length || deletedKeys.length ? {
+        imageActions: { keep: asArray<Record<string, unknown>>(draft.existingImages).map((image) => image.key), delete: deletedKeys, add: addedKeys },
+      } : {}
+      const desktopFields = {
+        ...(typeof pc.aliases === 'string' ? { aliases: pc.aliases.split(',').map((alias) => alias.trim()).filter(Boolean) } : {}),
+        ...(pc.admissionDate ? { admissionDate: pc.admissionDate } : {}),
+        ...(pc.healthStatus !== undefined ? { healthStatus: Number(pc.healthStatus) } : {}),
+        ...(pc.birthYear !== undefined && Number(pc.birthYear) !== -1 ? { birthYear: Number(pc.birthYear) } : {}),
+        ...gallery,
+        ...(isCreateMode && addedKeys.length ? { images: addedKeys } : {}),
+      }
       const attributeFieldCandidates: AttributeFieldName[] = ['attributes', 'attributeScore']
 
       let lastError: unknown = null
       for (const neuteredTypeValue of neuteredTypeCandidates) {
         for (const attributeField of attributeFieldCandidates) {
           try {
-            return await upsertAdminCat(toCreatePayload(values, avatar, locationOptions, roleOptions, neuteredTypeValue, attributeField), targetId)
+            return await upsertAdminCat({ ...toCreatePayload(values, avatar, locationOptions, roleOptions, neuteredTypeValue, attributeField), ...desktopFields }, targetId)
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : ''
             const isBadRequest = error instanceof ApiError && error.shape.httpStatus === 400
@@ -706,9 +740,8 @@ export function MobileLayout() {
       throw (lastError instanceof Error ? lastError : new Error('保存失败，请稍后重试'))
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['cat-detail', id] })
-      void queryClient.invalidateQueries({ queryKey: ['admin-cats'] })
-      void queryClient.invalidateQueries({ queryKey: ['cats'] })
+      clearDraft(draftKey)
+      invalidateRelatedQueries('cat', id)
       setSuccessModalOpen(true)
     },
     onError: (error) => message.error(error instanceof Error ? error.message : '保存失败，请稍后重试'),
@@ -717,9 +750,8 @@ export function MobileLayout() {
   const deleteMutation = useMutation({
     mutationFn: () => deleteAdminCat(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['cat-detail', id] })
-      void queryClient.invalidateQueries({ queryKey: ['admin-cats'] })
-      void queryClient.invalidateQueries({ queryKey: ['cats'] })
+      clearDraft(draftKey)
+      invalidateRelatedQueries('cat', id)
       Modal.success({
         centered: true,
         title: '删除成功',

@@ -1,3 +1,5 @@
+import { invalidateRelatedQueries } from '@shared/mutationSync'
+import { useRetainedState } from '@shared/drafts'
 import { useEffect, useRef, useState } from 'react'
 import { adminNewCatApi, typeApi } from '@pc/lib/api'
 import { CampusMap, type NewCatItem, type TagTypeOption, type TypeOption } from '@pc/types'
@@ -64,14 +66,14 @@ export function DesktopLayout() {
 
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
   const [selectedItem, setSelectedItem] = useState<NewCatItem | null>(null)
-  const [approveDialogOpen, setApproveDialogOpen] = useState(false)
+  const [approveDialogOpen, setApproveDialogOpen] = useRetainedState('admin-new-cats-dialog', 'approveDialogOpen', false)
   const [approving, setApproving] = useState(false)
-  const [approveItem, setApproveItem] = useState<NewCatItem | null>(null)
-  const [approveForm, setApproveForm] = useState({ officialName: '' })
-  const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
+  const [approveItem, setApproveItem] = useRetainedState<NewCatItem | null>('admin-new-cats-dialog', 'approveItem', null)
+  const [approveForm, setApproveForm] = useRetainedState('admin-new-cats-dialog', 'approveForm', { officialName: '' })
+  const [rejectDialogOpen, setRejectDialogOpen] = useRetainedState('admin-new-cats-dialog', 'rejectDialogOpen', false)
   const [rejecting, setRejecting] = useState(false)
-  const [rejectItem, setRejectItem] = useState<NewCatItem | null>(null)
-  const [rejectReason, setRejectReason] = useState('')
+  const [rejectItem, setRejectItem] = useRetainedState<NewCatItem | null>('admin-new-cats-dialog', 'rejectItem', null)
+  const [rejectReason, setRejectReason] = useRetainedState('admin-new-cats-dialog', 'rejectReason', '')
 
   const statusTabs = [
     { label: '全部线索', value: '' },
@@ -184,6 +186,7 @@ export function DesktopLayout() {
     setApproving(true)
     try {
       await adminNewCatApi.approveNewCat(approveItem.id, { officialName })
+      invalidateRelatedQueries('new-cat')
       toast.success('审核通过，猫咪已正式入库')
       handleCloseApprove()
       await fetchList()
@@ -204,6 +207,7 @@ export function DesktopLayout() {
     setRejecting(true)
     try {
       await adminNewCatApi.rejectNewCat(rejectItem.id, { reason: rejectReason.trim() || undefined })
+      invalidateRelatedQueries('new-cat')
       toast.success('线索已驳回')
       setRejectDialogOpen(false)
       setRejectItem(null)

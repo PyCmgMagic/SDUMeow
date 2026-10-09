@@ -1,8 +1,10 @@
+import { readDraft, useDraftSnapshot } from '@shared/drafts'
+import { invalidateRelatedQueries } from '@shared/mutationSync'
 import { CheckCircleFilled, CloseCircleFilled, SearchOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Button, Form, Input, Modal, message } from 'antd'
 import clsx from 'clsx'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { normalizeDynamicTypeLabel, normalizeDynamicTypeOptions, type DynamicTypeOption } from '@/api/adapters/types'
 import { approveAdminNewCat, getAdminNewCats, rejectAdminNewCat } from '@/api/endpoints/admin'
@@ -19,6 +21,7 @@ type ReviewStatus = 'pending' | 'approved' | 'rejected'
 type ReviewFilter = 'all' | 'pending' | 'approved' | 'rejected'
 
 type NewCatReviewItem = {
+  raw: Record<string, unknown>
   id: string
   name: string
   avatar: string
@@ -119,6 +122,7 @@ function normalizeNewCats(payload: unknown, tagOptions: DynamicTypeOption[]): Ne
     const location = asString(row.location || row.locationName || basicInfo.hauntLocation, campus || '未知地点')
 
     return {
+      raw: row,
       id: asString(row.id || row.newCatId, ''),
       name: asString(row.tempName || row.name || row.catName, `新猫咪${index + 1}`),
       avatar: normalizeMediaUrl(row.avatar || row.image || images[0]),
@@ -147,17 +151,35 @@ const statusText: Record<ReviewStatus, string> = {
 
 export function MobileLayout() {
   usePageTitle('审核新猫')
-  const queryClient = useQueryClient()
   const filtersState = useListFilters(['PENDING', 'APPROVED', 'REJECTED'])
   const { page, search: keywordInput, setSearch: setKeywordInput } = filtersState
   const activeFilter = (filtersState.status.toLowerCase() || 'all') as ReviewFilter
   const setActiveFilter = (filter: ReviewFilter) => filtersState.setStatus(filter === 'all' ? '' : filter.toUpperCase())
   const keyword = keywordInput.trim().toLowerCase()
   const [statusOverride, setStatusOverride] = useState<Record<string, ReviewStatus>>({})
-  const [approveTarget, setApproveTarget] = useState<NewCatReviewItem | null>(null)
-  const [rejectTarget, setRejectTarget] = useState<NewCatReviewItem | null>(null)
+  const [approveTarget, setApproveTarget] = useState<NewCatReviewItem | null>(() => {
+    const draft = readDraft('admin-new-cats-dialog').values
+    return draft.approveDialogOpen && draft.approveItem ? normalizeNewCats([draft.approveItem], [])[0] ?? null : null
+  })
+  const [rejectTarget, setRejectTarget] = useState<NewCatReviewItem | null>(() => {
+    const draft = readDraft('admin-new-cats-dialog').values
+    return draft.rejectDialogOpen && draft.rejectItem ? normalizeNewCats([draft.rejectItem], [])[0] ?? null : null
+  })
   const [approveForm] = Form.useForm<ApproveFormValues>()
   const [rejectForm] = Form.useForm<RejectFormValues>()
+  const [initialDraft] = useState(() => readDraft('admin-new-cats-dialog').values)
+  const approval = Form.useWatch([], { form: approveForm, preserve: true }) as ApproveFormValues | undefined
+  const rejection = Form.useWatch([], { form: rejectForm, preserve: true }) as RejectFormValues | undefined
+  useEffect(() => {
+    approveForm.setFieldsValue((initialDraft.approveForm as ApproveFormValues | undefined) ?? { officialName: '' })
+    rejectForm.setFieldsValue({ reply: String(initialDraft.rejectReason ?? '') })
+  }, [approveForm, rejectForm, initialDraft])
+  useDraftSnapshot('admin-new-cats-dialog', {
+    approveDialogOpen: !!approveTarget, approveItem: approveTarget?.raw ?? null,
+    approveForm: approveTarget ? approval ?? initialDraft.approveForm ?? { officialName: '' } : { officialName: '' },
+    rejectDialogOpen: !!rejectTarget, rejectItem: rejectTarget?.raw ?? null,
+    rejectReason: rejectTarget ? rejection?.reply ?? initialDraft.rejectReason ?? '' : '',
+  })
 
   const query = useQuery({ refetchOnMount: 'always', queryKey: ['admin-new-cats', page, filtersState.status, keyword], queryFn: async () => {
     const load = async (page: number, pageSize: number) => (await getAdminNewCats({ page, pageSize, status: filtersState.status || undefined })).data
@@ -193,9 +215,8 @@ export function MobileLayout() {
       setStatusOverride((current) => ({ ...current, [item.id]: 'approved' }))
       setApproveTarget(null)
       approveForm.resetFields()
+      invalidateRelatedQueries('new-cat')
       message.success('审核通过')
-      void queryClient.invalidateQueries({ queryKey: ['admin-new-cats'] })
-      void queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] })
     },
     onError: (error) => message.error(error instanceof Error ? error.message : '审核失败，请稍后再试'),
   })
@@ -206,9 +227,8 @@ export function MobileLayout() {
       setStatusOverride((current) => ({ ...current, [item.id]: 'rejected' }))
       setRejectTarget(null)
       rejectForm.resetFields()
+      invalidateRelatedQueries('new-cat')
       message.success('已拒绝')
-      void queryClient.invalidateQueries({ queryKey: ['admin-new-cats'] })
-      void queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] })
     },
     onError: (error) => message.error(error instanceof Error ? error.message : '拒绝失败，请稍后再试'),
   })

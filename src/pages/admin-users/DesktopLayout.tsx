@@ -1,3 +1,4 @@
+import { invalidateRelatedQueries } from '@shared/mutationSync'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Users } from 'lucide-react'
@@ -239,6 +240,7 @@ export function DesktopLayout() {
     setActionLoadingId(Number(user.id))
     try {
       await adminUserApi.toggleBan(user.id)
+      invalidateRelatedQueries('user')
       toast.success(`${actionText}成功`)
       await fetchUserList()
     } catch {

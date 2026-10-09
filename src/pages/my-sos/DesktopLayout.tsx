@@ -1,3 +1,4 @@
+import { useListFilters } from '@shared/useListFilters'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { sosApi } from '@pc/lib/api'
@@ -14,10 +15,13 @@ export function DesktopLayout() {
   const navigate = useNavigate()
   const pageSize = 10
   const [items, setItems] = useState<SOSItem[]>([])
-  const [currentPage, setCurrentPage] = useState(1)
+  const filters = useListFilters(['PENDING', 'PROCESSING', 'RESOLVED', 'CANCELLED'])
+  const currentPage = filters.page
+  const setCurrentPage = filters.setPage
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
-  const [selectedStatus, setSelectedStatus] = useState<SOSStatus | ''>('')
+  const selectedStatus = filters.status as SOSStatus | ''
+  const setSelectedStatus = filters.setStatus
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [cancelTarget, setCancelTarget] = useState<SOSItem | null>(null)
@@ -95,24 +99,10 @@ export function DesktopLayout() {
       setCancelling(false)
     }
   }
-  const statusWatchInitialized = useRef(false)
   useEffect(() => {
-    if (!statusWatchInitialized.current) {
-      statusWatchInitialized.current = true
-      return
-    }
-    if (currentPageRef.current === 1) void fetchRecords()
-    else setCurrentPage(1)
-  }, [fetchRecords, selectedStatus])
-  const pageWatchInitialized = useRef(false)
-  useEffect(() => {
-    if (!pageWatchInitialized.current) {
-      pageWatchInitialized.current = true
-      return
-    }
     void fetchRecords()
-  }, [fetchRecords, currentPage])
-  useEffect(() => { void fetchRecords() }, [fetchRecords])
+    return () => { latestRequestId.current += 1 }
+  }, [fetchRecords, currentPage, selectedStatus])
 
   return (
     <div className="min-h-full bg-gray-50 px-4 py-6 sm:px-6">

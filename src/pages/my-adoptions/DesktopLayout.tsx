@@ -1,3 +1,4 @@
+import { useListFilters } from '@shared/useListFilters'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { adoptionApi } from '@pc/lib/api'
@@ -12,10 +13,13 @@ export function DesktopLayout() {
   const navigate = useNavigate()
   const pageSize = 10
   const [adoptionList, setAdoptionList] = useState<MyAdoptionItem[]>([])
-  const [currentPage, setCurrentPage] = useState(1)
+  const filters = useListFilters(['PENDING', 'INTERVIEW', 'APPROVED', 'REJECTED', 'COMPLETED', 'CANCELLED'])
+  const currentPage = filters.page
+  const setCurrentPage = filters.setPage
   const [totalPages, setTotalPages] = useState(1)
   const [total, setTotal] = useState(0)
-  const [selectedStatus, setSelectedStatus] = useState<AdoptionStatus | ''>('')
+  const selectedStatus = filters.status as AdoptionStatus | ''
+  const setSelectedStatus = filters.setStatus
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
   const latestRequestId = useRef(0)
@@ -39,24 +43,10 @@ export function DesktopLayout() {
   const formatTime = (value?: string) => { if (!value) return '-'; const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(date) }
   const fetchAdoptions = useCallback(async () => { const requestId = ++latestRequestId.current; setLoading(true); setLoadError(''); try { const params: MyAdoptionQueryParams = { page: currentPageRef.current, size: pageSize, ...(selectedStatusRef.current ? { status: selectedStatusRef.current } : {}) }; const response = await adoptionApi.getMyAdoptions(params); if (requestId !== latestRequestId.current) return; setAdoptionList(response.items || []); setTotalPages(Math.max(Number(response.pages || 1), 1)); setTotal(Number(response.total || 0)) } catch (error) { if (requestId !== latestRequestId.current) return; setAdoptionList([]); setTotalPages(1); setTotal(0); setLoadError(error instanceof Error ? error.message : '领养申请暂时无法加载') } finally { if (requestId === latestRequestId.current) setLoading(false) } }, [])
   const changePage = (page: number) => { if (page >= 1 && page <= totalPages && page !== currentPage) setCurrentPage(page) }
-  const statusWatchInitialized = useRef(false)
   useEffect(() => {
-    if (!statusWatchInitialized.current) {
-      statusWatchInitialized.current = true
-      return
-    }
-    if (currentPageRef.current === 1) void fetchAdoptions()
-    else setCurrentPage(1)
-  }, [fetchAdoptions, selectedStatus])
-  const pageWatchInitialized = useRef(false)
-  useEffect(() => {
-    if (!pageWatchInitialized.current) {
-      pageWatchInitialized.current = true
-      return
-    }
     void fetchAdoptions()
-  }, [fetchAdoptions, currentPage])
-  useEffect(() => { void fetchAdoptions() }, [fetchAdoptions])
+    return () => { latestRequestId.current += 1 }
+  }, [fetchAdoptions, currentPage, selectedStatus])
 
   return (
     <div className="min-h-full bg-gray-50 px-4 py-6 sm:px-6">

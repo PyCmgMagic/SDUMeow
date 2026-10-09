@@ -1,3 +1,4 @@
+import { readDraft, useRetainedState } from '@shared/drafts'
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Input, Select } from 'antd'
@@ -6,10 +7,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { normalizeDynamicTypeLabel, normalizeDynamicTypeOptions, type DynamicTypeOption } from '@/api/adapters/types'
-import { ApiError, ApiNotFoundError } from '@/api/adapters/errors'
 import { getCats } from '@/api/endpoints/cats'
 import { getColors, getLocations, getTags } from '@/api/endpoints/types'
-import { ApiUnavailable } from '@/components/feedback/ApiUnavailable'
 import { QueryState } from '@/components/feedback/QueryState'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { asArray, asRecord, asString, toPaged } from '@/utils/format'
@@ -34,75 +33,6 @@ type CatItem = {
 
 const filters: CatFilter[] = ['全部', '在校', '已领养', '喵星', '住院', '领养处理中']
 const statusCodes: Partial<Record<CatFilter, string>> = { 在校: '0', 已领养: '1', 喵星: '2', 住院: '3', 领养处理中: '4' }
-
-const fallbackCats: CatItem[] = [
-  {
-    id: '1',
-    name: '少女',
-    avatar: 'https://loremflickr.com/240/180/cat?lock=21',
-    status: '领养处理中',
-    color: '玳瑁',
-    campus: '仁园',
-    location: '食堂',
-    meta: '玳瑁 · 仁园',
-    tags: ['待领养', '亲人'],
-  },
-  {
-    id: '2',
-    name: 'Ctrl',
-    avatar: 'https://loremflickr.com/240/180/cat?lock=22',
-    status: '在校',
-    color: '狸花',
-    campus: '软件园',
-    location: '校门',
-    meta: '狸花 · 软件园',
-    tags: ['在校', '软萌'],
-  },
-  {
-    id: '3',
-    name: '麻薯',
-    avatar: 'https://loremflickr.com/240/180/cat?lock=23',
-    status: '已毕业',
-    color: '三花',
-    campus: '软件园',
-    location: '东门',
-    meta: '三花 · 软件园',
-    tags: ['已领养', '吃货'],
-  },
-  {
-    id: '4',
-    name: '大橘座',
-    avatar: 'https://loremflickr.com/240/180/cat?lock=24',
-    status: '在校',
-    color: '橘猫',
-    campus: '中心校区',
-    location: '林荫道',
-    meta: '橘猫 · 中心校区',
-    tags: ['在校', '霸主'],
-  },
-  {
-    id: '5',
-    name: '蛋奶',
-    avatar: 'https://loremflickr.com/240/180/cat?lock=25',
-    status: '在校',
-    color: '奶牛',
-    campus: '图书馆',
-    location: '中庭',
-    meta: '奶牛 · 图书馆',
-    tags: ['在校', '安静'],
-  },
-  {
-    id: '6',
-    name: '小黑',
-    avatar: 'https://loremflickr.com/240/180/cat?lock=26',
-    status: '领养处理中',
-    color: '纯黑',
-    campus: '软件园',
-    location: '草坪',
-    meta: '纯黑 · 软件园',
-    tags: ['待领养', '高冷'],
-  },
-]
 
 const statusStyle: Record<CatStatus, string> = {
   在校: 'bg-[#ecfdf3] text-[#2e7d32]',
@@ -292,14 +222,17 @@ function CatCover({ src, alt }: CatCoverProps) {
   return <img alt={alt} className="h-full w-full object-cover" loading="lazy" referrerPolicy="no-referrer" src={src} onError={() => setHasError(true)} />
 }
 
-function isRecoverableAdminCatsError(error: unknown): boolean {
-  if (error instanceof ApiNotFoundError) return true
-  return error instanceof ApiError && error.shape.httpStatus !== null && error.shape.httpStatus >= 500
-}
-
 export function MobileLayout() {
   usePageTitle('猫咪档案管理')
   const navigate = useNavigate()
+  const [resumeEditor, setResumeEditor] = useRetainedState('admin-cats-dialog', 'editDialogOpen', false)
+  useEffect(() => {
+    if (!resumeEditor) return
+    const cat = readDraft('admin-cats-dialog').values.selectedCatForEdit as { id: string } | null
+    setResumeEditor(false)
+    navigate(`/admin/cats/${cat?.id || 'new'}/edit`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 挂载时接续桌面端正在编辑的档案。
+  }, [resumeEditor])
   const listFilters = useListFilters(['0', '1', '2', '3', '4'])
   const { page, search: keywordInput, setSearch: setKeywordInput } = listFilters
   const activeFilter = filters.find((item) => statusCodes[item] === listFilters.status) || '全部'
@@ -339,12 +272,7 @@ export function MobileLayout() {
     [colorsQuery.data?.data, locationsQuery.data?.data, tagsQuery.data?.data],
   )
 
-  const cats = useMemo(() => {
-    const normalized = normalizeCats(query.data?.data, typeOptions)
-    if (normalized.length > 0) return normalized
-    if (isRecoverableAdminCatsError(query.error)) return fallbackCats
-    return normalized
-  }, [query.data?.data, query.error, typeOptions])
+  const cats = useMemo(() => normalizeCats(query.data?.data, typeOptions), [query.data?.data, typeOptions])
 
   const filteredCats = cats
 
@@ -393,7 +321,7 @@ export function MobileLayout() {
         </div>
 
         <QueryState
-          error={isRecoverableAdminCatsError(query.error) ? null : query.error}
+          error={query.error}
           isEmpty={!query.isLoading && !query.error && filteredCats.length === 0}
           isLoading={query.isLoading}
           emptyDescription="暂无猫咪档案"
@@ -453,11 +381,7 @@ export function MobileLayout() {
         </QueryState>
         <ListPagination data={query.data?.data} page={page} onChange={listFilters.setPage} loading={query.isFetching} />
 
-        {isRecoverableAdminCatsError(query.error) ? (
-          <div className="mt-4">
-            <ApiUnavailable onRetry={() => query.refetch()} title="猫咪管理接口暂不可用，当前展示设计稿态" />
-          </div>
-        ) : null}
+
       </div>
 
       <Link

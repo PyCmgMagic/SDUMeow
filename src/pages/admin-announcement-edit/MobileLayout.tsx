@@ -1,5 +1,7 @@
+import { readDraft, useRetainedState } from '@shared/drafts'
+import { invalidateRelatedQueries } from '@shared/mutationSync'
 import { ArrowLeftOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Button, Form, Input, Modal, Select, Switch, message } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -21,7 +23,7 @@ type AnnouncementFormValues = {
   type: number
 }
 
-type EditableNotice = AnnouncementFormValues
+type EditableNotice = AnnouncementFormValues & { summary?: string; coverImage?: string; status?: string }
 
 const emptyNotice: EditableNotice = {
   title: '',
@@ -46,6 +48,9 @@ function toEditableNotice(item: unknown): EditableNotice | null {
   if (!id) return null
 
   return {
+    summary: asString(row.summary),
+    coverImage: asString(row.coverImage),
+    status: asString(row.status),
     title: asString(row.title),
     content: asString(row.content || row.summary || row.description),
     isPinned: normalizePinned(row),
@@ -62,11 +67,20 @@ export function MobileLayout() {
   usePageTitle('编辑公告内容')
   const navigate = useNavigate()
   const location = useLocation()
-  const queryClient = useQueryClient()
   const { id = 'new' } = useParams()
   const [form] = Form.useForm<AnnouncementFormValues>()
   const isCreateMode = id === 'new'
   const [initialized, setInitialized] = useState(false)
+  const [dialogForm, setDialogForm] = useRetainedState<Record<string, unknown>>('admin-announcements-dialog', 'form', {})
+  const [, setEditingId] = useRetainedState('admin-announcements-dialog', 'editingId', '')
+  const [, setEditorOpen] = useRetainedState('admin-announcements-dialog', 'editorOpen', false)
+  const values = Form.useWatch([], form) as AnnouncementFormValues | undefined
+  useEffect(() => {
+    if (!initialized || !values) return
+    setEditingId(isCreateMode ? '' : id)
+    setDialogForm({ ...dialogForm, title: values.title, content: values.content, isPinned: values.isPinned, type: ['HEALTH', 'FEEDING', 'BEHAVIOR', 'NEWS'][values.type] || 'NEWS' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 将移动端字段同步到桌面现有弹窗。
+  }, [initialized, values, id])
 
   const noticeFromState = useMemo(() => {
     const stateRecord = asRecord(location.state)
@@ -100,22 +114,25 @@ export function MobileLayout() {
     if (listQuery.isLoading && !isCreateMode && !noticeFromState) return
 
     const seed = isCreateMode ? emptyNotice : noticeFromState ?? noticeFromQuery ?? emptyNotice
+    const sameNotice = readDraft('admin-announcements-dialog').values.editingId === (isCreateMode ? '' : id)
+    if (!sameNotice) setDialogForm({ summary: seed.summary || '', coverImage: seed.coverImage || '', status: seed.status || 'DRAFT' })
     form.setFieldsValue({
-      title: seed.title,
-      content: seed.content,
-      isPinned: seed.isPinned,
-      type: seed.type,
+      title: String((sameNotice ? dialogForm.title : undefined) ?? seed.title),
+      content: String((sameNotice ? dialogForm.content : undefined) ?? seed.content),
+      isPinned: Boolean((sameNotice ? dialogForm.isPinned : undefined) ?? seed.isPinned),
+      type: sameNotice ? normalizeAnnouncementTypeId(dialogForm.type, seed.type) : seed.type,
     })
     setInitialized(true)
-  }, [form, initialized, isCreateMode, listQuery.isLoading, noticeFromQuery, noticeFromState])
+  }, [dialogForm, form, id, initialized, isCreateMode, listQuery.isLoading, noticeFromQuery, noticeFromState, setDialogForm])
 
   const mutation = useMutation({
     mutationFn: ({ values, mode }: { values: AnnouncementFormValues; mode: SaveMode }) =>
       upsertAdminAnnouncement(
         {
+          ...dialogForm,
           title: values.title,
           content: values.content,
-          summary: values.content.slice(0, 120),
+          summary: String(dialogForm.summary || values.content.slice(0, 120)),
           type: values.type,
           status: mode === 'published' ? 'PUBLISHED' : 'DRAFT',
           pinned: values.isPinned,
@@ -124,7 +141,9 @@ export function MobileLayout() {
         isCreateMode ? undefined : id,
       ),
     onSuccess: (result, variables) => {
-      void queryClient.invalidateQueries({ queryKey: ['admin-announcements'] })
+      setEditorOpen(false)
+      setDialogForm({})
+      invalidateRelatedQueries('announcement')
       const nextId = variables.mode === 'draft' && isCreateMode ? getResultId(result.data) : ''
       Modal.success({
         title: variables.mode === 'draft' ? '保存成功' : '发布成功',

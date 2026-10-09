@@ -1,3 +1,4 @@
+import { invalidateRelatedQueries } from '@shared/mutationSync'
 import {
   ArrowLeftOutlined,
   CameraOutlined,
@@ -355,11 +356,8 @@ export function MobileLayout() {
         okText: '知道了',
       })
 
-      void queryClient.invalidateQueries({ queryKey: ['leaderboard', 'popularity'] })
-      void queryClient.invalidateQueries({ queryKey: ['cats', 'home'] })
-      void queryClient.invalidateQueries({ queryKey: ['me'] })
+      invalidateRelatedQueries('feed', id)
       void useAuthStore.getState().fetchUserInfo()
-      void queryClient.invalidateQueries({ queryKey: ['cat-detail', id] })
     },
     onError: (error) => message.error(error instanceof Error ? error.message : '投喂失败，请稍后重试'),
   })

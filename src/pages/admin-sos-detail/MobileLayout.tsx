@@ -1,4 +1,6 @@
-﻿import {
+import { readDraft, useRetainedState } from '@shared/drafts'
+import { invalidateRelatedQueries } from '@shared/mutationSync'
+import {
   ArrowLeftOutlined,
   CheckCircleFilled,
   EnvironmentOutlined,
@@ -29,25 +31,6 @@ type SosDetail = {
   media: Array<{ id: string; type: 'image' | 'video' }>
 }
 
-const fallbackDetail: SosDetail = {
-  id: '1',
-  catName: '未知猫咪（黑猫）',
-  location: '软件园校区 · 食堂北门灌木丛',
-  status: 'pending',
-  statusLabel: '待处理',
-  publishedAt: '12 分钟前发布',
-  description:
-    '发现时猫咪躲在食堂北门灌木丛深处，右后腿有明显贯穿伤，伤口仍在渗血。猫咪精神状态萎靡，对人的靠近有强烈哈气行为，无法直接上手。建议携带诱捕笼和加厚手套进行救助。',
-  reporterName: '张子涵',
-  reporterMeta: '软件学院 · 2022级本科生',
-  reporterPhone: '13800000000',
-  media: [
-    { id: '1', type: 'image' },
-    { id: '2', type: 'image' },
-    { id: '3', type: 'video' },
-  ],
-}
-
 function normalizeDetail(payload: unknown, id: string): SosDetail | null {
   const rawItems = Array.isArray(payload) ? payload : toPaged<Record<string, unknown>>(payload).items
   const found = rawItems.find((item, index) => {
@@ -75,7 +58,7 @@ function normalizeDetail(payload: unknown, id: string): SosDetail | null {
     ),
     reporterName: asString(row.reporterName || row.userName, '匿名同学'),
     reporterMeta: asString(row.reporterMeta || row.department, '山东大学在校生'),
-    reporterPhone: asString(row.phone, '13800000000'),
+    reporterPhone: asString(row.phone, '未提供联系电话'),
     media: [
       { id: '1', type: 'image' },
       { id: '2', type: 'image' },
@@ -90,11 +73,22 @@ export function MobileLayout() {
   const { id = '1' } = useParams()
 
   const query = useQuery({ queryKey: ['admin-sos', id], queryFn: getAdminSos })
-  const detail = useMemo(() => normalizeDetail(query.data?.data, id) ?? fallbackDetail, [id, query.data?.data])
+  const detail = useMemo(() => normalizeDetail(query.data?.data, id), [id, query.data?.data])
 
+  const [, setResolveOpen] = useRetainedState('admin-sos-dialog', 'resolveDialogOpen', false)
+  const [, setReplyForm] = useRetainedState('admin-sos-dialog', 'replyForm', { status: 'PROCESSING', reply: '' })
   const resolveMutation = useMutation({
-    mutationFn: () => resolveSos(id, { status: 'RESOLVED', reply: '已安排协会同学到场处理' }),
+    mutationFn: () => {
+      if (!detail) throw new Error('未找到该救援记录')
+      const draft = readDraft('admin-sos-dialog').values
+      const target = draft.selectedSOS as { id: string } | null
+      const reply = draft.replyForm as { reply?: string } | undefined
+      return resolveSos(id, { status: 'RESOLVED', reply: target?.id === id && reply?.reply ? reply.reply : '已安排协会同学到场处理' })
+    },
     onSuccess: () => {
+      invalidateRelatedQueries('sos')
+      setResolveOpen(false)
+      setReplyForm({ status: 'PROCESSING', reply: '' })
       message.success('已标记为解决')
       void query.refetch()
     },
@@ -122,7 +116,8 @@ export function MobileLayout() {
         </div>
       </div>
 
-      <QueryState error={query.error} isLoading={query.isLoading}>
+      <QueryState error={query.error} isLoading={query.isLoading} isEmpty={!detail} emptyDescription="未找到该救援记录">
+        {detail && <>
         <section className="-mt-10 rounded-t-[40px] bg-white px-6 pb-8 pt-8 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
           <div className="mb-5 flex items-center justify-between">
             <span className="rounded-xl bg-[#fff1f2] px-4 py-1.5 text-[12px] font-extrabold text-[#e11d48]">
@@ -196,6 +191,7 @@ export function MobileLayout() {
             {detail.status === 'pending' ? '标记为已解决' : '已关闭'}
           </Button>
         </div>
+        </>}
       </QueryState>
     </div>
   )

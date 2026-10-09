@@ -1,3 +1,5 @@
+import { invalidateRelatedQueries } from '@shared/mutationSync'
+import { useRetainedState } from '@shared/drafts'
 import { useEffect, useRef, useState } from 'react'
 import { adoptionApi } from '@pc/lib/api'
 import {
@@ -69,12 +71,12 @@ export function DesktopLayout() {
   const selectedStatus = filters.status === '' ? '' : Number(filters.status) as AdminAdoptionStatus
   const setSelectedStatus = (status: AdminAdoptionStatus | '') => filters.setStatus(String(status))
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
-  const [auditDialogOpen, setAuditDialogOpen] = useState(false)
+  const [auditDialogOpen, setAuditDialogOpen] = useRetainedState('admin-adoptions-dialog', 'auditDialogOpen', false)
   const [selectedDetail, setSelectedDetail] = useState<AdoptionItem | null>(null)
-  const [selectedAdoption, setSelectedAdoption] = useState<AdoptionItem | null>(null)
+  const [selectedAdoption, setSelectedAdoption] = useRetainedState<AdoptionItem | null>('admin-adoptions-dialog', 'selectedAdoption', null)
   const [auditing, setAuditing] = useState(false)
-  const [auditStatus, setAuditStatus] = useState<AdoptionAuditStatus>('INTERVIEW')
-  const [auditReason, setAuditReason] = useState('')
+  const [auditStatus, setAuditStatus] = useRetainedState<AdoptionAuditStatus>('admin-adoptions-dialog', 'auditStatus', 'INTERVIEW')
+  const [auditReason, setAuditReason] = useRetainedState('admin-adoptions-dialog', 'auditReason', '')
   const latestRequestIdRef = useRef(0)
 
   const statusTabs: Array<{ label: string; value: AdminAdoptionStatus | '' }> = [
@@ -298,6 +300,7 @@ export function DesktopLayout() {
         reason: auditReason.trim()
       })
       toast.success('领养申请已更新')
+      invalidateRelatedQueries('adoption')
       closeAudit()
       await fetchList()
     } finally {

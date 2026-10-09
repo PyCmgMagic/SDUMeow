@@ -1,8 +1,10 @@
+import { invalidateRelatedQueries } from '@shared/mutationSync'
+import { readDraft, useRetainedState } from '@shared/drafts'
 import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, PlusOutlined, PushpinOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Button, Modal, Select, message } from 'antd'
 import clsx from 'clsx'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { ApiNotFoundError } from '@/api/adapters/errors'
@@ -73,7 +75,14 @@ function normalizeNoticeList(payload: unknown, typeOptions = getAnnouncementType
 export function MobileLayout() {
   usePageTitle('公告管理中心')
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
+  const [resumeEditor, setResumeEditor] = useRetainedState('admin-announcements-dialog', 'editorOpen', false)
+  useEffect(() => {
+    if (!resumeEditor) return
+    const id = readDraft('admin-announcements-dialog').values.editingId
+    setResumeEditor(false)
+    navigate(`/admin/announcements/${id || 'new'}/edit`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 接续桌面端公告编辑。
+  }, [resumeEditor])
   const [deletingId, setDeletingId] = useState('')
   const filters = useListFilters(['DRAFT', 'PUBLISHED'])
 
@@ -91,7 +100,7 @@ export function MobileLayout() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteAdminAnnouncement(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['admin-announcements'] })
+      invalidateRelatedQueries('announcement')
       Modal.success({
         title: '删除成功',
         content: '公告已删除',

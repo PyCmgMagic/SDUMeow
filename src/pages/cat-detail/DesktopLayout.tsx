@@ -1,9 +1,9 @@
+import { invalidateRelatedQueries } from '@shared/mutationSync'
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { catApi, postApi, typeApi } from '@pc/lib/api';
 import { getAccessToken } from '@pc/lib/auth'
 import { useAuthStore } from '@shared/auth.store'
-import { queryClient } from '@shared/queryClient'
 import { getCatAdoptionUnavailableReason, isCatAdoptable } from '@pc/lib/cat'
 import { MomentCard } from '@pc/components/MomentCard';
 import { Button } from '@pc/components/ui/button';
@@ -164,6 +164,7 @@ const fetchPosts = async () => {
 }
 
 const handlePostDeleted = (postId: string) => {
+    invalidateRelatedQueries('moment', catId)
     setPostList((prev) => prev.filter((item) => item.id !== postId))
 }
 // 检查登录状态并跳转领养页
@@ -191,8 +192,9 @@ const handleFeed = async () => {
     setFeedLoading(true)
     try {
         const res = await catApi.feedCat(catId)
-        await useAuthStore.getState().fetchUserInfo()
-        void queryClient.invalidateQueries({ queryKey: ['me'] })
+        invalidateRelatedQueries('feed', catId)
+        void useAuthStore.getState().fetchUserInfo().catch(() => undefined)
+        void fetchCatDetail()
         toast.success(`投喂成功！剩余猫粮: ${res?.userCurrency ?? '--'}`)
     } catch (error) {
         const msg = error instanceof Error ? error.message : '投喂失败'
