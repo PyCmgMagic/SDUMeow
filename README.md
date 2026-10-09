@@ -24,7 +24,7 @@ cd SDUMeow
 pnpm install --frozen-lockfile
 ```
 
-将 [apps/web/.env.example](apps/web/.env.example) 复制为 `apps/web/.env.local`，按后端环境填写配置。随后在仓库根目录运行：
+将根目录的 [.env.example](.env.example) 复制为 `.env.local`，按后端环境填写配置。随后在仓库根目录运行：
 
 ```bash
 pnpm dev
@@ -36,7 +36,7 @@ pnpm dev
 
 ## 环境配置
 
-配置文件放在 `apps/web/` 下，本地使用 `.env.local`，生产构建可使用 `.env.production`。
+配置文件放在仓库根目录，本地使用 `.env.local`，生产构建可使用 `.env.production`。
 
 ```dotenv
 # 开发服务器将 /api 请求代理到此地址，并保留 /api 前缀。
@@ -61,21 +61,26 @@ VITE_API_BASE_URL=/api
 ## 项目结构
 
 ```text
-apps/web/
-├── public/                 # 直接发布的静态资源
-├── src/
+SDUMeow/
+├── src/                    # 应用源码
 │   ├── app/                # 路由与旧地址兼容
 │   ├── pages/              # 页面入口及 PC / 移动端布局
 │   ├── pc/                 # PC 组件、样式、状态与接口客户端
 │   ├── mobile/             # 移动端组件、样式、状态与接口客户端
 │   ├── shared/             # 设备判定、会话与 JWT 工具
 │   └── main.tsx            # 应用入口
+├── public/                 # 直接发布的静态资源
+├── scripts/                # 构建清理等辅助脚本
+├── index.html              # 单一 HTML 入口
+├── package.json            # 依赖与开发、构建命令
 ├── .env.example            # 环境配置示例
-└── vite.config.ts          # 开发代理与构建配置
-scripts/                    # 根目录辅助脚本
+├── vite.config.ts          # 开发代理与构建配置
+└── tsconfig*.json          # TypeScript 配置
 ```
 
 页面通常由 `index.tsx` 选择 `DesktopLayout.tsx` 或 `MobileLayout.tsx`，部分页面仅有单端实现。PC 使用 Radix UI / shadcn 风格组件，移动端使用 Ant Design；共享 Tailwind 配置，按设备标记隔离全局样式。
+
+项目按单应用组织，源码与配置直接位于根目录，无需进入子包运行命令。`pnpm-workspace.yaml` 仅保留依赖安装时的构建许可配置。
 
 路径别名：`@pc` 指向 `src/pc`，`@` 指向 `src/mobile`，`@shared` 指向 `src/shared`。状态管理使用 Zustand，移动端请求缓存使用 TanStack Query。
 
@@ -116,7 +121,7 @@ Vite 开发代理不包含在构建产物中，生产环境需单独配置 API �
 
 ## 仓库约定
 
-根目录 README 随源码维护。接口文件和内部说明集中在本地 `docs/`；Mock、测试、本地环境文件和构建产物由 `.gitignore` 排除，不提交到远端。
+根目录 README 随源码维护。接口文件和内部说明集中在本地 `docs/`。仓库仅保留应用源码与必要配置，不包含 Mock、测试、覆盖率报告或迁移备份；本地环境文件、内部文档和构建产物由 `.gitignore` 排除，不提交到远端。
 
 ## 项目来源
 

@@ -3,8 +3,7 @@ import animate from 'tailwindcss-animate'
 
 // Merged Tailwind config of the former desktop and mobile apps. The two
 // variants use disjoint namespaces (shadcn CSS-variable tokens vs. `brand-*`),
-// so a single union config reproduces both builds' utility sets. Each HTML
-// entry imports only its own stylesheet.
+// so a single config supports both layouts in the shared SPA entry.
 const config = {
   darkMode: ['class'],
   safelist: ['dark'],
@@ -12,8 +11,6 @@ const config = {
 
   content: [
     './index.html',
-    './pc/index.html',
-    './mobile/index.html',
     './src/**/*.{ts,tsx}',
   ],
 

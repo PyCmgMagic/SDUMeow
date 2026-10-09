@@ -69,7 +69,7 @@ export default defineConfig(({ mode }) => {
         : undefined,
     },
     build: {
-      outDir: fileURLToPath(new URL('../../dist', import.meta.url)),
+      outDir: fileURLToPath(new URL('./dist', import.meta.url)),
       emptyOutDir: true,
       // Ant Design is kept as one cacheable vendor boundary; application
       // routes are split below this threshold.

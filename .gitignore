@@ -9,9 +9,9 @@ dist-ssr
 coverage
 *.local
 .local-dev-backup/
-apps/web/mock/
-apps/web/tests/
-apps/web/vite.config.local.ts
+/mock/
+/tests/
+/vite.config.local.ts
 
 # Local documentation and API specifications
 /docs/
@@ -32,3 +32,18 @@ apps/web/vite.config.local.ts
 Thumbs.db
 *.suo
 *.sw?
+
+# Local logs, archives and credentials
+logs
+*.log
+build
+.next/
+*.ntvs*
+*.njsproj
+*.sln
+*.vsix
+*.zip
+*.tar
+*.tar.gz
+*.pem
+*.key
