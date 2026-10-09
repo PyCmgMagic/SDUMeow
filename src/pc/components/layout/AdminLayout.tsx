@@ -187,8 +187,8 @@ export function AdminLayout() {
         {/* Logo 区域 */}
         <div className="admin-sidebar-brand flex h-20 items-center justify-between px-6">
           <div className="flex items-center min-w-0">
-            <img src={logo} alt="SDU Meow logo" className="mr-3 size-8 shrink-0 rounded-lg object-contain" />
-            <span className="text-2xl font-black tracking-tight truncate">SDU Meow</span>
+            <img src={logo} alt="MEOW logo" className="mr-3 size-8 shrink-0 rounded-lg object-contain" />
+            <span className="text-2xl font-black tracking-tight truncate">MEOW</span>
           </div>
           <button
             type="button"

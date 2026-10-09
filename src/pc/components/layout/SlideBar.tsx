@@ -15,6 +15,7 @@ import iconPost from '@pc/assets/icons/post.svg'
 import iconFound from '@pc/assets/icons/found.svg'
 import iconAdopt from '@pc/assets/icons/adopt.svg'
 import iconIndividual from '@pc/assets/icons/individual.svg'
+import iconTeam from '@pc/assets/icons/team.svg'
 
 const menuItems: MenuItem[] = [
   { name: '首页', path: '/', icon: iconHome },
@@ -22,6 +23,7 @@ const menuItems: MenuItem[] = [
   { name: '发现新猫', path: '/new-cat', icon: iconFound },
   { name: '领养申请', path: '/adopt', icon: iconAdopt },
   { name: '个人中心', path: '/me', icon: iconIndividual },
+  { name: '开发团队', path: '/team', icon: iconTeam },
 ]
 
 interface SlideBarProps {
@@ -115,13 +117,13 @@ export function SlideBar({ mobileOpen, onClose }: SlideBarProps) {
           <div className="public-sidebar-brand h-20 flex items-center px-4 shrink-0">
             <img
               src={logo}
-              alt="山大猫猫图鉴 logo"
+              alt="猫猫图鉴 logo"
               className="w-10 h-10 ml-2.5 mt-2.2 rounded-[10px] object-contain"
             />
             <div className="flex flex-col justify-center items-start">
-              <h1 className="text-[18px] font-bold tracking-wider ml-3 leading-1">SDU Meow</h1>
+              <h1 className="text-[18px] font-bold tracking-wider ml-3 leading-1">MEOW</h1>
               <span className="text-[13px] text-gray-400 ml-3 font-medium leading-1 tracking-wider">
-                山大猫猫图鉴
+                猫猫图鉴
               </span>
             </div>
             {!isDesktop && (
@@ -137,7 +139,7 @@ export function SlideBar({ mobileOpen, onClose }: SlideBarProps) {
           </div>
 
           {/* 菜单 */}
-          <nav className="flex-1 w-full pt-6 space-y-3">
+          <nav className="flex-1 w-full overflow-y-auto pt-6 space-y-3">
             {menuItems.map((item) => (
               <Link
                 key={item.path}

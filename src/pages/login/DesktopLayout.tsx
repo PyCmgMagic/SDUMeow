@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { StudentOnlineLogo } from '@pc/components/StudentOnlineLogo'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from '@pc/lib/toast'
 import { Eye, EyeOff, GraduationCap, LoaderCircle, LogIn, ShieldAlert, X } from 'lucide-react'
@@ -69,8 +70,8 @@ export function DesktopLayout() {
     <main className="auth-page auth-login-page">
       <section className="auth-card auth-card-login" aria-labelledby="login-title">
         <header className="auth-card-header">
-          <img src={logo} alt="SDU Meow" className="auth-logo" />
-          <p className="auth-eyebrow">SDU MEOW / CAMPUS CAT DIRECTORY</p>
+          <img src={logo} alt="MEOW" className="auth-logo" />
+          <p className="auth-eyebrow">MEOW / CAMPUS CAT DIRECTORY</p>
           <h1 id="login-title" className="auth-title">Hello，校友！</h1>
           <p className="auth-subtitle">欢迎回到猫猫图鉴</p>
         </header>
@@ -158,6 +159,9 @@ export function DesktopLayout() {
             <button type="button" className="auth-text-button" onClick={goVisitor}>游客登录</button>
           </div>
         </div>
+        <footer className="flex justify-center px-8 pb-6" aria-label="学生在线">
+          <StudentOnlineLogo className="w-[clamp(8.5rem,38vw,12rem)]" />
+        </footer>
       </section>
     </main>
   )
