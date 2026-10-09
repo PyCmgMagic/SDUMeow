@@ -62,6 +62,7 @@ export async function getCats(params?: GetCatsParams): Promise<ApiResult<CatList
 
 export async function getCatDetail(catId: string): Promise<ApiResult<CatDetail>> {
   const result = await apiRequest<Record<string, unknown>>({ method: 'GET', url: `/cats/${catId}` })
+  if (!Object.keys(asRecord(result.data)).length) return { ...result, data: null }
   const cat = normalizeCat(result.data)
   const row = asRecord(result.data)
   const basicInfo = asRecord(row.basicInfo)

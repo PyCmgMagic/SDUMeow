@@ -21,6 +21,7 @@ import { Textarea } from '@pc/components/ui/textarea'
 import { CatPickerDialog } from '@pc/components/CatPickerDialog'
 import { ArrowLeft, Building2, CheckCircle2, ChevronRight, HeartHandshake, Home, MessageCircle, PawPrint, Phone, School, Sprout, Users } from 'lucide-react'
 import { clearDraft, readDraft, useDraftSnapshot } from '@shared/drafts'
+import { invalidateRelatedQueries } from '@shared/mutationSync'
 
 const housingOptions: Array<{ id: AdoptionHousing; label: string; icon: ComponentType<{ className?: string }> }> = [
   { id: 'OWN_HOUSE', label: AdoptionHousingMap.OWN_HOUSE, icon: Home },
@@ -130,6 +131,7 @@ export function DesktopLayout() {
         }
       };
       await catApi.submitAdoption(payload);
+      void invalidateRelatedQueries('adoption')
       clearDraft('adopt')
       navigate('/my-adoptions')
     }

@@ -8,7 +8,7 @@ import {
 } from '@ant-design/icons'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Button, Modal, message } from 'antd'
-import { useState } from 'react'
+import { useRef } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { banAdminUser, getAdminUserDetail } from '@/api/endpoints/admin'
@@ -35,19 +35,19 @@ type UserDetail = {
 
 const fallbackDetail: UserDetail = {
   id: '1',
-  name: '爱吃鱼的猫',
+  name: '用户',
   avatar: '',
-  level: 3,
-  department: '软件园校区',
-  grade: '2022级',
-  studentNo: '202200301234',
-  createdAt: '2024-03-15',
+  level: 0,
+  department: '未提供',
+  grade: '--',
+  studentNo: '',
+  createdAt: '--',
   role: '普通用户',
   permission: '',
   status: 'active',
-  feedCount: 32,
-  reportCount: 5,
-  likeCount: 128,
+  feedCount: 0,
+  reportCount: 0,
+  likeCount: 0,
 }
 
 const campusCodeLabelMap: Record<string, string> = {
@@ -121,6 +121,15 @@ function resolveRoleByPermission(permissionRaw: string, fallbackRoleRaw: string)
   return fallbackRoleRaw || fallbackDetail.role
 }
 
+function normalizeUserStatus(row: Record<string, unknown>, fallback: UserDetail['status']): UserDetail['status'] {
+  const status = String(row.status ?? '').trim().toUpperCase()
+  if (['1', 'BANNED', 'DISABLED'].includes(status)) return 'banned'
+  if (['0', 'NORMAL', 'ACTIVE'].includes(status)) return 'active'
+  const banned = row.isBanned ?? row.banned ?? row.disabled
+  if (typeof banned === 'boolean') return banned ? 'banned' : 'active'
+  return fallback
+}
+
 function normalizeUserDetail(payload: unknown, id: string, fallbackStatus: UserDetail['status']): UserDetail {
   const row = asRecord(payload)
   const stats = asRecord(row.stats)
@@ -128,13 +137,6 @@ function normalizeUserDetail(payload: unknown, id: string, fallbackStatus: UserD
   const campus = normalizeCampus(row.campus)
   const permission = normalizePermission(row.permission ?? row.permissions)
   const roleRaw = asString(row.roleName || row.role, '')
-  const statusRaw = asString(row.status).toUpperCase()
-  const isBanned =
-    statusRaw === 'BANNED' ||
-    statusRaw === 'DISABLED' ||
-    row.isBanned === true ||
-    row.banned === true ||
-    row.disabled === true
 
   return {
     id: normalizeId(row.id ?? row.uid, id),
@@ -143,11 +145,11 @@ function normalizeUserDetail(payload: unknown, id: string, fallbackStatus: UserD
     level: asNumber(row.level, fallbackDetail.level),
     department: asString(row.department || row.college || campus, fallbackDetail.department),
     grade: inferGrade(asString(row.grade || row.classYear, ''), sid),
-    studentNo: sid,
+    studentNo: sid || '未提供',
     createdAt: formatTimestampText(row.createdAt || row.registerTime, fallbackDetail.createdAt),
     role: resolveRoleByPermission(permission, roleRaw),
     permission,
-    status: isBanned ? 'banned' : fallbackStatus,
+    status: normalizeUserStatus(row, fallbackStatus),
     feedCount: asNumber(row.feedCount ?? stats.feedCount, fallbackDetail.feedCount),
     reportCount: asNumber(row.reportCount ?? stats.found ?? stats.foundNewCatCount, fallbackDetail.reportCount),
     likeCount: asNumber(row.likeCount ?? stats.receivedLikes, fallbackDetail.likeCount),
@@ -160,8 +162,8 @@ export function MobileLayout() {
   const location = useLocation()
   const { id = '1' } = useParams()
   const stateRecord = asRecord(location.state)
-  const stateStatusRaw = asString(stateRecord.userStatus || asRecord(stateRecord.user).status).toUpperCase()
-  const stateStatus: UserDetail['status'] = stateStatusRaw === 'BANNED' ? 'banned' : 'active'
+  const stateStatus = normalizeUserStatus({ ...asRecord(stateRecord.user), status: stateRecord.userStatus ?? asRecord(stateRecord.user).status }, 'active')
+  const operationPending = useRef(false)
 
   const query = useQuery({ queryKey: ['admin-user', id], queryFn: () => getAdminUserDetail(id) })
   const detail = query.data?.data
@@ -171,27 +173,24 @@ export function MobileLayout() {
         id,
         status: stateStatus,
       }
-  const [statusOverride, setStatusOverride] = useState<UserDetail['status'] | null>(null)
-  const effectiveStatus = statusOverride ?? detail.status
-  const isBanned = effectiveStatus === 'banned'
+  const isBanned = detail.status === 'banned'
+  const hasDetail = Boolean(query.data?.data && Object.keys(query.data.data).length)
 
   const disableMutation = useMutation({
     mutationFn: async () => {
-      const result = await banAdminUser(id, { action: 'BAN', reason: 'manual review' })
+      const result = await banAdminUser(id)
       if (typeof result.code === 'number' && result.code >= 400) {
         const raw = asRecord(result.raw)
         throw new Error(result.message || asString(raw.msg || raw.message, '操作失败，请稍后再试'))
       }
       return result
     },
-    onSuccess: () => {
-      invalidateRelatedQueries('user')
+    onSuccess: async () => {
+      // 必须由后端详情确认这次取反的实际结果，不能使用本地状态覆盖查询。
+      await invalidateRelatedQueries('user')
       message.success('账号状态已更新')
-      setStatusOverride((current) => {
-        const nextBase = current ?? detail.status
-        return nextBase === 'banned' ? 'active' : 'banned'
-      })
     },
+    onSettled: () => { operationPending.current = false },
     onError: (error) => {
       const errorMessage = error instanceof Error ? error.message : '操作失败，请稍后再试'
       Modal.error({
@@ -224,7 +223,7 @@ export function MobileLayout() {
       </section>
 
       <div className="h5-content pt-0">
-        <QueryState error={query.error} isLoading={query.isLoading}>
+        <QueryState error={query.error} isLoading={query.isLoading} isEmpty={!query.isLoading && !query.error && !hasDetail} emptyDescription="暂无用户信息">
           <div className="mb-4 rounded-[24px] border border-black/[0.02] bg-white px-5 pb-6 pt-7 text-center shadow-[0_4px_15px_rgba(0,0,0,0.01)]">
             <div className="mx-auto mb-4 h-[100px] w-[100px] overflow-hidden rounded-full border-4 border-[#f8fafc] bg-gradient-to-br from-[#d1d5db] to-[#94a3b8] shadow-[0_10px_25px_rgba(0,0,0,0.05)]">
               {detail.avatar ? <img alt={detail.name} className="h-full w-full object-cover" src={detail.avatar} /> : null}
@@ -282,7 +281,12 @@ export function MobileLayout() {
                   ? 'border-[#86efac] bg-[#dcfce7] text-[#15803d]'
                   : 'border-[#fecdd3] bg-[#fff1f2] text-[#e11d48]'
               }`}
-              onClick={() => disableMutation.mutate()}
+              disabled={disableMutation.isPending || query.isFetching || !hasDetail}
+              onClick={() => {
+                if (operationPending.current || disableMutation.isPending || query.isFetching || !hasDetail) return
+                operationPending.current = true
+                disableMutation.mutate()
+              }}
               type="button"
             >
               <UserDeleteOutlined />

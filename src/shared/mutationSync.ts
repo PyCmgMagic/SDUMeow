@@ -14,5 +14,5 @@ export function invalidateRelatedQueries(kind: MutationKind, id?: string) {
     sos: [['admin-sos'], ['my-sos'], ['admin-dashboard'], ['notifications']],
     user: [['admin-users'], ['admin-user'], ['admin-dashboard'], ['me']],
   }
-  for (const queryKey of keys[kind]) void queryClient.invalidateQueries({ queryKey })
+  return Promise.all(keys[kind].map((queryKey) => queryClient.invalidateQueries({ queryKey })))
 }

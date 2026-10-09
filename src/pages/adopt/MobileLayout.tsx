@@ -22,6 +22,7 @@ import { createAdoption } from '@/api/endpoints/adoptions'
 import { getCats } from '@/api/endpoints/cats'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { clearDraft, useAntdDraft } from '@shared/drafts'
+import { invalidateRelatedQueries } from '@shared/mutationSync'
 import './mobile.css'
 
 type AdoptionForm = {
@@ -114,7 +115,7 @@ export function MobileLayout() {
           wechat: payload.wechat,
         },
       }),
-    onSuccess: () => { clearDraft('adopt'); message.success('提交成功，请等待协会审核'); navigate('/my-adoptions') },
+    onSuccess: () => { void invalidateRelatedQueries('adoption'); clearDraft('adopt'); message.success('提交成功，请等待协会审核'); navigate('/my-adoptions') },
     onError: (error) => message.error(error instanceof Error ? error.message : '提交失败'),
   })
 

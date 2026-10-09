@@ -5,7 +5,6 @@ import clsx from 'clsx'
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
-import { ApiError, ApiNotFoundError } from '@/api/adapters/errors'
 import { normalizeDynamicTypeLabel, normalizeDynamicTypeOptions, type DynamicTypeOption } from '@/api/adapters/types'
 import { upsertAdminCat } from '@/api/endpoints/admin'
 import { getCatDetail } from '@/api/endpoints/cats'
@@ -19,6 +18,7 @@ import { DeleteOutlined } from '@ant-design/icons'
 import { deleteMoment, getMoments } from '@/api/endpoints/moments'
 import type { ApiResult } from '@/types/api'
 import { toPaged } from '@/utils/format'
+import { invalidateRelatedQueries } from '@shared/mutationSync'
 
 type CatStatus = '在校' | '待领养' | '已领养' | '已毕业' | '治疗中' | '喵星'
 
@@ -56,26 +56,6 @@ type CatDetailView = {
   description: string
   tags: string[]
   relationships: RelationItem[]
-}
-
-const fallbackDetail: CatDetailView = {
-  id: '1',
-  name: '麻薯',
-  avatar: 'https://loremflickr.com/640/640/cat?lock=56',
-  gender: 'FEMALE',
-  status: '在校',
-  role: '校园猫',
-  color: '三花',
-  location: '软件园校区',
-  neuteredLabel: '已绝育',
-  recordAge: '1.5 年',
-  friendliness: 90,
-  gluttony: 95,
-  appearance: 99,
-  fight: 40,
-  description: '进食时不喜欢被摸头，偶尔会哈气。',
-  tags: ['亲人', '吃货', '粘人'],
-  relationships: [],
 }
 
 function toStatus(rawStatus: unknown): CatStatus {
@@ -253,11 +233,6 @@ function normalizeCatDetail(
   }
 }
 
-function isRecoverableCatDetailError(error: unknown): boolean {
-  if (error instanceof ApiNotFoundError) return true
-  return error instanceof ApiError && error.shape.httpStatus !== null && error.shape.httpStatus >= 500
-}
-
 const statusBadgeClass: Record<CatStatus, string> = {
   在校: 'bg-[#16a34a] text-white',
   待领养: 'bg-[#ef4444] text-white',
@@ -304,12 +279,8 @@ export function MobileLayout() {
     },
   })
 
-  const detail = useMemo(() => {
-    const normalized = normalizeCatDetail(query.data?.data, id, roleOptions, locationOptions)
-    if (normalized) return normalized
-    if (isRecoverableCatDetailError(query.error)) return fallbackDetail
-    return null
-  }, [id, locationOptions, query.data?.data, query.error, roleOptions])
+  const detail = useMemo(() => query.error ? null : normalizeCatDetail(query.data?.data, id, roleOptions, locationOptions),
+    [id, locationOptions, query.data?.data, query.error, roleOptions])
 
   const moments = useMemo(() => asArray<Record<string, unknown>>(momentsQuery.data).map(normalizeMoment), [momentsQuery.data])
 
@@ -332,9 +303,7 @@ export function MobileLayout() {
     mutationFn: () => upsertAdminCat({ status: 'GRADUATED' }, id),
     onSuccess: () => {
       message.success('已标记毕业')
-      void queryClient.invalidateQueries({ queryKey: ['cat-detail', id] })
-      void queryClient.invalidateQueries({ queryKey: ['admin-cats'] })
-      void queryClient.invalidateQueries({ queryKey: ['cats'] })
+      void invalidateRelatedQueries('cat', id)
     },
     onError: (error) => message.error(error instanceof Error ? error.message : '操作失败，请稍后重试'),
   })
@@ -342,7 +311,7 @@ export function MobileLayout() {
   return (
     <div className="pb-[150px]">
       <QueryState
-        error={isRecoverableCatDetailError(query.error) ? null : query.error}
+        error={query.error}
         isEmpty={!query.isLoading && !query.error && !detail}
         isLoading={query.isLoading}
         emptyDescription="暂无猫咪详情"
@@ -447,9 +416,9 @@ export function MobileLayout() {
         ) : null}
       </QueryState>
 
-      {isRecoverableCatDetailError(query.error) ? (
+      {query.error ? (
         <div className="h5-content mt-4">
-          <ApiUnavailable onRetry={() => query.refetch()} title="猫咪详情接口暂不可用，当前展示设计稿态" />
+          <ApiUnavailable onRetry={() => query.refetch()} title="猫咪详情加载失败，请重试" />
         </div>
       ) : null}
 

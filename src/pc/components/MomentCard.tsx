@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { invalidateRelatedQueries } from '@shared/mutationSync'
 import type { PostItem } from '@pc/types'
 import { Heart, Trash2 } from 'lucide-react'
 import { postApi } from '@pc/lib/api'
@@ -22,6 +23,11 @@ export function MomentCard(props: MomentCardProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const canDelete = String(userInfo?.uid || '') === String(props.data.user?.id || '')
+
+  useEffect(() => {
+    setIsLiked(data.isLiked)
+    setLikeCount(data.likeCount)
+  }, [data.id, data.isLiked, data.likeCount])
 
   // 时间格式化
   const timeAgo = () => {
@@ -56,6 +62,7 @@ export function MomentCard(props: MomentCardProps) {
       const nextLiked = !isLiked
       setIsLiked(nextLiked)
       setLikeCount(likeCount + (nextLiked ? 1 : -1))
+      void invalidateRelatedQueries('moment')
 
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '操作失败，请重试')
@@ -70,6 +77,7 @@ export function MomentCard(props: MomentCardProps) {
     try {
       await postApi.deletePost(props.data.id)
       setDeleteDialogOpen(false)
+      void invalidateRelatedQueries('moment')
       onDeleted?.(props.data.id)
       toast.success('动态已删除')
     } catch (error) {

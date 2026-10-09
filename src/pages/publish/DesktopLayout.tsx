@@ -13,6 +13,7 @@ import { Input } from '@pc/components/ui/input'
 import { Textarea } from '@pc/components/ui/textarea'
 import { CatPickerDialog } from '@pc/components/CatPickerDialog'
 import { clearDraft, readDraft, useDraftSnapshot } from '@shared/drafts'
+import { invalidateRelatedQueries } from '@shared/mutationSync'
 
 const predefinedTags = ['日常', '搞笑', '可爱', '求助', '科普', '记录', '偶遇', '投喂']
 
@@ -135,6 +136,7 @@ export function DesktopLayout() {
         media: media.length ? media : undefined,
       })
       toast.success('动态已发布')
+      void invalidateRelatedQueries('moment', String(form.selectedCat.id))
       clearDraft('publish')
       navigate('/')
     } catch (error) {

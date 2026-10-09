@@ -6,7 +6,7 @@ import {
   PlusCircleOutlined,
   SendOutlined,
 } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Button, Form, Input, Select, message } from 'antd'
 import { useEffect, useRef } from 'react'
 import type { ChangeEvent } from 'react'
@@ -18,6 +18,7 @@ import { getCats } from '@/api/endpoints/cats'
 import { publishMoment } from '@/api/endpoints/moments'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { clearDraft, readDraft, useAntdDraft, useDraftMedia } from '@shared/drafts'
+import { invalidateRelatedQueries } from '@shared/mutationSync'
 
 type PublishForm = {
   content: string
@@ -49,7 +50,6 @@ function toDataUrl(file: File): Promise<string> {
 export function MobileLayout() {
   usePageTitle('分享趣事')
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   const [form] = Form.useForm<PublishForm>()
   const catIdFromQuery = searchParams.get('catId')?.trim() ?? ''
@@ -140,10 +140,7 @@ export function MobileLayout() {
       setMediaList([])
       form.resetFields(['content', 'location'])
 
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['cat-moments', values.relatedCatIds] }),
-        queryClient.invalidateQueries({ queryKey: ['moments'] }),
-      ])
+      await invalidateRelatedQueries('moment', values.relatedCatIds)
 
       navigate(`/cats/${values.relatedCatIds}`)
     },
