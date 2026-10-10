@@ -1,3 +1,4 @@
+import { useListFilters } from '@shared/useListFilters'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { LucideIcon } from 'lucide-react'
@@ -44,8 +45,13 @@ const markAllAsRead = useNotificationStore((s) => s.markAllAsRead)
 const markAnnouncementsSeen = useNotificationStore((s) => s.markAnnouncementsSeen)
 const fetchPreview = useNotificationStore((s) => s.fetchPreview)
 
-const [activeTab, setActiveTab] = useState<TabValue>('all')
-const [currentPage, setCurrentPage] = useState(1)
+const filters = useListFilters()
+const tab = filters.params.get('tab')
+const activeTab: TabValue = tab === 'unread' || tab === 'adoption' || tab === 'announcements' ? tab : 'all'
+const setActiveTab = (tab: TabValue) => filters.update({ tab })
+const currentPage = filters.page
+const setCurrentPage = filters.setPage
+const announcementRequest = useRef(0)
 const pageSize = 10
 const [allNotificationTotal, setAllNotificationTotal] = useState(0)
 const [adoptionNotificationTotal, setAdoptionNotificationTotal] = useState(0)
@@ -146,17 +152,20 @@ const fetchTabCounts = async () => {
 }
 
 const fetchAnnouncements = async () => {
+  const request = ++announcementRequest.current
   setAnnouncementLoading(true)
   setAnnouncementError('')
   try {
     const data = await announcementApi.getAnnouncements({ page: currentPage, pageSize })
+    if (request !== announcementRequest.current) return
     setAnnouncements(pageItems(data))
     setAnnouncementTotal(pageTotal(data))
     setAnnouncementPages(pageCount(data))
   } catch (error) {
+    if (request !== announcementRequest.current) return
     setAnnouncementError(error instanceof Error ? error.message : '公告加载失败')
   } finally {
-    setAnnouncementLoading(false)
+    if (request === announcementRequest.current) setAnnouncementLoading(false)
   }
 }
 
@@ -229,34 +238,15 @@ const changePage = (page: number) => {
   setCurrentPage(page)
 }
 
-// watch(activeTab, ...)：跳过首次执行（Vue 的 watch 默认不 immediate）
-const activeTabFirstRun = useRef(true)
 useEffect(() => {
-  if (activeTabFirstRun.current) {
-    activeTabFirstRun.current = false
-    return
-  }
-  if (currentPage !== 1) setCurrentPage(1)
-  else void fetchCurrentTab()
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- 模拟 Vue watch(activeTab)
-}, [activeTab])
-
-// watch(currentPage, ...)：跳过首次执行（Vue 的 watch 默认不 immediate）
-const currentPageFirstRun = useRef(true)
-useEffect(() => {
-  if (currentPageFirstRun.current) {
-    currentPageFirstRun.current = false
-    return
-  }
   void fetchCurrentTab()
-// eslint-disable-next-line react-hooks/exhaustive-deps -- 意图为仅挂载执行 / 模拟 Vue watch
-}, [currentPage])
+  return () => { announcementRequest.current += 1 }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- URL 筛选改变时加载对应页面。
+}, [activeTab, currentPage])
 
 useEffect(() => {
-  void (async () => {
-    await Promise.allSettled([fetchPreview(), fetchCurrentTab(), fetchTabCounts()])
-  })()
-// eslint-disable-next-line react-hooks/exhaustive-deps -- 意图为仅挂载执行 / 模拟 Vue watch
+  void Promise.allSettled([fetchPreview(), fetchTabCounts()])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 汇总只在挂载时加载。
 }, [])
 
 return (
@@ -284,7 +274,7 @@ return (
       </header>
 
       <div className="mb-6 overflow-x-auto border-2 border-black bg-white p-3 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-        <div className="flex min-w-max gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:min-w-max">
           {tabs.map((tab) => {
             const TabIcon = tab.icon
             return (
@@ -292,14 +282,14 @@ return (
                 key={tab.value}
                 type="button"
                 className={cn(
-                  'flex h-10 items-center gap-2 border-2 px-4 text-sm font-bold transition-colors',
+                  'flex h-10 min-w-0 items-center justify-center gap-2 border-2 px-2 text-sm font-bold transition-colors sm:px-4',
                   activeTab === tab.value
                     ? 'border-black bg-[#5CD6C2] text-black shadow-[2px_2px_0px_rgba(0,0,0,1)]'
                     : 'border-transparent bg-gray-100 text-gray-600 hover:border-black hover:bg-[#DDF8F2]',
                 )}
                 onClick={() => setActiveTab(tab.value)}
               >
-                <TabIcon className="h-4 w-4" />
+                <TabIcon className="h-4 w-4 shrink-0" />
                 {tab.label}
                 <span className="border border-black/20 bg-white/70 px-1.5 text-xs text-gray-700">
                   {tabCount(tab.value) > 99 ? '99+' : tabCount(tab.value)}

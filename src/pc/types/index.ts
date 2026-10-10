@@ -1002,3 +1002,8 @@ export interface AnnouncementTypeOption {
   id: number;
   label: string;
 }
+
+/** Community group QR response after the HTTP envelope is unwrapped. */
+export interface GroupQrCodeResult {
+  qrcodeUrl: string
+}

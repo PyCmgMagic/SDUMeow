@@ -12,6 +12,8 @@ import { Button } from '@pc/components/ui/button'
 import { Input } from '@pc/components/ui/input'
 import { Textarea } from '@pc/components/ui/textarea'
 import { CatPickerDialog } from '@pc/components/CatPickerDialog'
+import { clearDraft, readDraft, useDraftSnapshot } from '@shared/drafts'
+import { invalidateRelatedQueries } from '@shared/mutationSync'
 
 const predefinedTags = ['日常', '搞笑', '可爱', '求助', '科普', '记录', '偶遇', '投喂']
 
@@ -22,15 +24,26 @@ export function DesktopLayout() {
   const [isCatDialogOpen, setCatDialogOpen] = useState(false)
   const fileInput = useRef<HTMLInputElement | null>(null)
 
-  const [form, setForm] = useState({
-    selectedCat: null as CatListItem | null,
-    title: '',
-    content: '',
-    tags: [] as string[],
-    images: [] as string[],
-    imageFiles: [] as File[],
-    location: '',
+  const [form, setForm] = useState(() => {
+    const draft = readDraft('publish')
+    const selectedCat = draft.values.selectedCat as CatListItem | null
+    return {
+      title: '',
+      content: '',
+      tags: [] as string[],
+      images: [] as string[],
+      location: '',
+      ...draft.values,
+      imageFiles: draft.files,
+      selectedCat: selectedCat && String(selectedCat.id) === draft.values.catId ? selectedCat : null,
+    }
   })
+  useDraftSnapshot('publish', { selectedCat: form.selectedCat, ...(form.selectedCat ? { catId: String(form.selectedCat.id) } : {}), title: form.title, content: form.content, tags: form.tags, location: form.location }, form.imageFiles)
+  useEffect(() => {
+    const urls = readDraft('publish').files.map((file) => URL.createObjectURL(file))
+    setForm((previous) => ({ ...previous, images: urls }))
+    return () => urls.forEach((url) => URL.revokeObjectURL(url))
+  }, [])
 
   // 卸载时回收预览 URL 需要读取最新 images，用 ref 镜像
   const imagesRef = useRef(form.images)
@@ -123,6 +136,8 @@ export function DesktopLayout() {
         media: media.length ? media : undefined,
       })
       toast.success('动态已发布')
+      void invalidateRelatedQueries('moment', String(form.selectedCat.id))
+      clearDraft('publish')
       navigate('/')
     } catch (error) {
       console.error(error)
@@ -134,10 +149,14 @@ export function DesktopLayout() {
 
   // route.query.catId（string | null）
   const catIdQuery = new URLSearchParams(location.search).get('catId')
+  const catSelectionInitialized = useRef(false)
 
   // 挂载时与 catId 变化时预选猫咪（对应 onMounted + watch）
   useEffect(() => {
-    if (catIdQuery) void selectCatById(catIdQuery)
+    const selectedId = catSelectionInitialized.current ? catIdQuery : String(readDraft('publish').values.catId || '') || catIdQuery
+    catSelectionInitialized.current = true
+    if (selectedId && String(form.selectedCat?.id || '') !== selectedId) void selectCatById(selectedId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅路由变更时预选，避免覆盖手动选择
   }, [catIdQuery])
 
   // 卸载时回收全部预览图片 URL（对应 onBeforeUnmount）

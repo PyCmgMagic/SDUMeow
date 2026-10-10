@@ -1,3 +1,5 @@
+import { invalidateRelatedQueries } from '@shared/mutationSync'
+import { useRetainedState } from '@shared/drafts'
 import { useEffect, useRef, useState } from 'react'
 import { adminNewCatApi, typeApi } from '@pc/lib/api'
 import { CampusMap, type NewCatItem, type TagTypeOption, type TypeOption } from '@pc/types'
@@ -44,29 +46,34 @@ import {
   XCircle
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { useListFilters } from '@shared/useListFilters'
+import { filterPagedList } from '@shared/filterPagedList'
 
 export function DesktopLayout() {
+  const filters = useListFilters(['PENDING', 'APPROVED', 'REJECTED'])
   const [loading, setLoading] = useState(false)
   const [newCatList, setNewCatList] = useState<NewCatItem[]>([])
   const pageSize = 10
-  const [currentPage, setCurrentPage] = useState(1)
+  const currentPage = filters.page
+  const setCurrentPage = filters.setPage
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
-  const [selectedStatus, setSelectedStatus] = useState('')
+  const selectedStatus = filters.status
+  const setSelectedStatus = filters.setStatus
   const [tagOptions, setTagOptions] = useState<TagTypeOption[]>([])
   const [locationOptions, setLocationOptions] = useState<TypeOption[]>([])
   const latestRequestIdRef = useRef(0)
 
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
   const [selectedItem, setSelectedItem] = useState<NewCatItem | null>(null)
-  const [approveDialogOpen, setApproveDialogOpen] = useState(false)
+  const [approveDialogOpen, setApproveDialogOpen] = useRetainedState('admin-new-cats-dialog', 'approveDialogOpen', false)
   const [approving, setApproving] = useState(false)
-  const [approveItem, setApproveItem] = useState<NewCatItem | null>(null)
-  const [approveForm, setApproveForm] = useState({ officialName: '' })
-  const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
+  const [approveItem, setApproveItem] = useRetainedState<NewCatItem | null>('admin-new-cats-dialog', 'approveItem', null)
+  const [approveForm, setApproveForm] = useRetainedState('admin-new-cats-dialog', 'approveForm', { officialName: '' })
+  const [rejectDialogOpen, setRejectDialogOpen] = useRetainedState('admin-new-cats-dialog', 'rejectDialogOpen', false)
   const [rejecting, setRejecting] = useState(false)
-  const [rejectItem, setRejectItem] = useState<NewCatItem | null>(null)
-  const [rejectReason, setRejectReason] = useState('')
+  const [rejectItem, setRejectItem] = useRetainedState<NewCatItem | null>('admin-new-cats-dialog', 'rejectItem', null)
+  const [rejectReason, setRejectReason] = useRetainedState('admin-new-cats-dialog', 'rejectReason', '')
 
   const statusTabs = [
     { label: '全部线索', value: '' },
@@ -111,20 +118,21 @@ export function DesktopLayout() {
     const requestId = ++latestRequestIdRef.current
     setLoading(true)
     try {
-      const response = await adminNewCatApi.getNewCatList({
-        page: currentPage,
-        pageSize,
-        ...(selectedStatus ? { status: selectedStatus } : {})
-      })
+      const load = (page: number, pageSize: number) => adminNewCatApi.getNewCatList({ page, pageSize, ...(selectedStatus ? { status: selectedStatus } : {}) })
+      const keyword = filters.search.trim().toLowerCase()
+      const response = keyword ? await filterPagedList<NewCatItem>(load, currentPage, (item) =>
+        [item.id, item.tempName, item.officialName, item.campus, item.location, item.submitterName].join(' ').toLowerCase().includes(keyword),
+      ) : await load(currentPage, pageSize)
       if (requestId !== latestRequestIdRef.current) return
 
       const items = response.items || []
       setNewCatList(items)
       setTotal(Number(response.total ?? items.length))
-      const responsePages = Number(response.totalPage)
-      setTotalPages(Number.isFinite(responsePages) && responsePages > 0
-        ? responsePages
-        : Math.max(Math.ceil(Number(response.total ?? items.length) / pageSize), 1))
+      const responsePages = Number('pages' in response ? response.pages : response.totalPage)
+      const resolvedPages = Number.isFinite(responsePages) && responsePages > 0
+        ? responsePages : Math.max(Math.ceil(Number(response.total ?? items.length) / pageSize), 1)
+      if (currentPage > resolvedPages) setCurrentPage(resolvedPages)
+      setTotalPages(resolvedPages)
     } catch (error) {
       if (requestId !== latestRequestIdRef.current) return
       console.error('Failed to fetch new cat list:', error)
@@ -137,26 +145,11 @@ export function DesktopLayout() {
     }
   }
 
-  const skipSelectedStatusWatch = useRef(true)
   useEffect(() => {
-    if (skipSelectedStatusWatch.current) {
-      skipSelectedStatusWatch.current = false
-      return
-    }
-    if (currentPage === 1) void fetchList()
-    else setCurrentPage(1)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedStatus])
-
-  const skipCurrentPageWatch = useRef(true)
-  useEffect(() => {
-    if (skipCurrentPageWatch.current) {
-      skipCurrentPageWatch.current = false
-      return
-    }
     void fetchList()
+    return () => { latestRequestIdRef.current += 1 }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage])
+  }, [currentPage, selectedStatus, filters.search])
 
   const handleViewDetails = (item: NewCatItem) => {
     setSelectedItem(item)
@@ -193,6 +186,7 @@ export function DesktopLayout() {
     setApproving(true)
     try {
       await adminNewCatApi.approveNewCat(approveItem.id, { officialName })
+      invalidateRelatedQueries('new-cat')
       toast.success('审核通过，猫咪已正式入库')
       handleCloseApprove()
       await fetchList()
@@ -213,6 +207,7 @@ export function DesktopLayout() {
     setRejecting(true)
     try {
       await adminNewCatApi.rejectNewCat(rejectItem.id, { reason: rejectReason.trim() || undefined })
+      invalidateRelatedQueries('new-cat')
       toast.success('线索已驳回')
       setRejectDialogOpen(false)
       setRejectItem(null)
@@ -247,12 +242,10 @@ export function DesktopLayout() {
   }
 
   useEffect(() => {
-    void fetchList()
     void Promise.allSettled([typeApi.getTags(), typeApi.getLocations()]).then(([tags, locations]) => {
       if (tags.status === 'fulfilled') setTagOptions(tags.value)
       if (locations.status === 'fulfilled') setLocationOptions(locations.value)
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
@@ -278,6 +271,7 @@ export function DesktopLayout() {
       </header>
 
       <section className="admin-filter-panel flex flex-col gap-4 border-2 border-black bg-white p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] sm:flex-row sm:items-center sm:justify-between">
+        <Input aria-label="搜索新猫线索" placeholder="搜索猫咪名称、校区或提交人..." value={filters.search} onChange={(event) => filters.setSearch(event.target.value)} className="max-w-xs" />
         <div className="admin-status-tabs flex w-full overflow-x-auto border-2 border-black bg-gray-100 p-1 sm:w-auto" aria-label="线索状态筛选">
           {statusTabs.map((tab) => (
             <button

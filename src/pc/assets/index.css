@@ -2477,3 +2477,20 @@
     }
   }
 }
+
+@layer components {
+  [data-device='pc'] [data-public-theme='admin'] .team-page :is(.team-panel, .team-logo-tile, .team-qr) {
+    border-width: 2px;
+    border-color: #000;
+  }
+  [data-device='pc'] [data-public-theme='admin'] .team-page .team-panel {
+    box-shadow: 5px 5px 0 #000;
+  }
+  [data-device='pc'] [data-public-theme='admin'] .team-page :is(.team-panel-header, .team-discipline) {
+    border-bottom-width: 2px;
+    border-color: #000;
+  }
+  [data-device='pc'] [data-public-theme='admin'] .team-page .team-discipline:last-child {
+    border-bottom-width: 0;
+  }
+}

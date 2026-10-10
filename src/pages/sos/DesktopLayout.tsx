@@ -11,6 +11,7 @@ import { Input } from '@pc/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@pc/components/ui/select'
 import { Textarea } from '@pc/components/ui/textarea'
 import { CatPickerDialog } from '@pc/components/CatPickerDialog'
+import { clearDraft, readDraft, useDraftSnapshot } from '@shared/drafts'
 import { AlertTriangle, ArrowLeft, Camera, CircleAlert, Search, Siren, X } from 'lucide-react'
 
 export function DesktopLayout() {
@@ -22,9 +23,21 @@ export function DesktopLayout() {
   const fileInput = useRef<HTMLInputElement | null>(null)
   const [symptomOptions, setSymptomOptions] = useState<SymptomTypeOption[]>([])
   const [colorOptions, setColorOptions] = useState<TypeOption[]>([])
-  const [form, setForm] = useState({
-    catId: '', selectedCat: null as CatListItem | null, campus: '', location: '', symptoms: [] as number[], description: '', images: [] as string[], imageFiles: [] as File[]
+  const [form, setForm] = useState(() => {
+    const draft = readDraft('sos')
+    const selectedCat = draft.values.selectedCat as CatListItem | null
+    return {
+      catId: '', campus: '', location: '', symptoms: [] as number[], description: '', images: [] as string[],
+      ...draft.values, imageFiles: draft.files,
+      selectedCat: selectedCat && String(selectedCat.id) === draft.values.catId ? selectedCat : null,
+    }
   })
+  useDraftSnapshot('sos', { catId: form.catId, selectedCat: form.selectedCat, campus: form.campus, location: form.location, symptoms: form.symptoms, description: form.description }, form.imageFiles)
+  useEffect(() => {
+    const urls = readDraft('sos').files.map((file) => URL.createObjectURL(file))
+    setForm((previous) => ({ ...previous, images: urls }))
+    return () => urls.forEach((url) => URL.revokeObjectURL(url))
+  }, [])
   const campusOptions = Object.entries(CampusMap).map(([value, label]) => ({ value, label }))
   const colorLabels = useMemo(() => new Map(colorOptions.map((item) => [item.id, item.label])), [colorOptions])
   const colorLabel = (id: number) => colorLabels.get(id) || `花色 #${id}`
@@ -91,6 +104,7 @@ export function DesktopLayout() {
       const media = await uploadImages(form.imageFiles)
       await sosApi.submitSOS({ catId: form.catId || undefined, campus: Number(form.campus), location: form.location.trim(), symptoms: form.symptoms, description: form.description.trim(), media })
       toast.success('SOS 求助已上报，请保持联系方式畅通')
+      clearDraft('sos')
       navigate('/my-sos')
     } catch (error) { toast.error(error instanceof Error ? error.message : 'SOS 上报失败，请稍后重试') } finally { setLoading(false) }
   }
@@ -102,7 +116,7 @@ export function DesktopLayout() {
         const [symptoms, colors] = await Promise.all([typeApi.getSymptoms(), typeApi.getColors()])
         setSymptomOptions(symptoms)
         setColorOptions(colors)
-        const catId = new URLSearchParams(location.search).get('catId') ?? ''
+        const catId = form.catId || new URLSearchParams(location.search).get('catId')
         if (catId) await selectCatById(catId)
       } catch (error) { console.error('Failed to initialize SOS form', error); toast.error('基础数据加载失败，请检查网络后重试') } finally { setInitializing(false) }
     })()

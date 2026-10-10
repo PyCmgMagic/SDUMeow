@@ -1,6 +1,7 @@
 import {http}from '@pc/lib/https';
 import type{ 
     PublicStatsData,
+    GroupQrCodeResult,
     AdminDashboardStats,
     CatDetail,
     PageResult,
@@ -129,7 +130,7 @@ const normalizeAdminAdoptionPage = (
     const source = Array.isArray(page) ? { items: page } : page
     const items = source.items || source.records || source.list || source.content || []
     const total = Number(source.total ?? items.length)
-    const size = Math.max(Number(source.size ?? 10), 1)
+    const size = Math.max(Number(source.size ?? (items.length || 10)), 1)
     const current = Math.max(Number(source.current ?? source.currentPage ?? 1), 1)
     const pages = Math.max(Number(source.pages ?? source.totalPage ?? (Math.ceil(total / size) || 1)), 1)
 
@@ -374,4 +375,17 @@ export const notificationApi = {
     http.get<FlexiblePageResult<NotificationItem>>('/notifications', { params }),
   markAsRead: (id: string) => http.post<null>(`/notifications/${id}/read`),
   markAllAsRead: () => http.post<null>('/notifications/read-all')
+}
+
+export const communityApi = {
+    getGroupQrCode: async (signal?: AbortSignal): Promise<GroupQrCodeResult> => {
+        const result = await http.get<GroupQrCodeResult>('/community/group-qrcode', {
+            authScope: 'none', silent: true, signal,
+        })
+        const value = typeof result?.qrcodeUrl === 'string' ? result.qrcodeUrl.trim() : ''
+        let url: URL
+        try { url = new URL(value) } catch { throw new Error('二维码地址无效') }
+        if (!['https:', 'http:'].includes(url.protocol)) throw new Error('二维码地址无效')
+        return { qrcodeUrl: url.href }
+    },
 }

@@ -28,7 +28,7 @@ export function toPaged<T>(value: unknown): Paged<T> {
   return {
     items: asArray<T>(rawItems),
     total: asNumber(record.total, asNumber(record.totalElements, asArray<T>(rawItems).length)),
-    pages: asNumber(record.pages, asNumber(record.totalPages)),
+    pages: asNumber(record.pages, asNumber(record.totalPages, asNumber(record.totalPage))),
     current: asNumber(record.current, asNumber(record.page, asNumber(record.number))),
     size: asNumber(record.size, asNumber(record.pageSize)),
   }

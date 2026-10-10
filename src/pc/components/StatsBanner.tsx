@@ -34,7 +34,7 @@ export function StatsBanner() {
         <div className="flex flex-col relative z-10 justify-between gap-8 md:flex-row">
             <div className="text-center md:text-left">
                 <h2 className="text-3xl font-bold mb-2 traking-wide text-white drop-shadow-md">
-                    欢迎来到山大猫猫图鉴
+                    欢迎来到猫猫图鉴
                 </h2>
                 <p className="text-white/80 text-sm font-medium p-2">
                     发现校园里的每一只可爱猫咪，记录它们的成长故事

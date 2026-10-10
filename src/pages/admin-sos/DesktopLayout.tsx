@@ -1,3 +1,5 @@
+import { invalidateRelatedQueries } from '@shared/mutationSync'
+import { useRetainedState } from '@shared/drafts'
 import { useEffect, useRef, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -20,6 +22,7 @@ import { Textarea } from '@pc/components/ui/textarea'
 import { AdminPageHeader } from '@pc/components/admin/AdminPageHeader'
 import { AdminPanel } from '@pc/components/admin/AdminPanel'
 import { AdminStatusTabs } from '@pc/components/admin/AdminStatusTabs'
+import { useListFilters } from '@shared/useListFilters'
 
 const pageSize = 10
 
@@ -56,18 +59,21 @@ const formatTime = (value?: string) => {
 }
 
 export function DesktopLayout() {
+  const filters = useListFilters(['PENDING', 'PROCESSING', 'RESOLVED', 'CANCELLED'])
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [sosList, setSosList] = useState<SOSItem[]>([])
-  const [currentPage, setCurrentPage] = useState(1)
+  const currentPage = filters.page
+  const setCurrentPage = filters.setPage
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
-  const [selectedStatus, setSelectedStatus] = useState<SOSStatus | ''>('')
-  const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
+  const selectedStatus = filters.status as SOSStatus | ''
+  const setSelectedStatus = filters.setStatus
+  const [resolveDialogOpen, setResolveDialogOpen] = useRetainedState('admin-sos-dialog', 'resolveDialogOpen', false)
   const [resolving, setResolving] = useState(false)
-  const [selectedSOS, setSelectedSOS] = useState<SOSItem | null>(null)
+  const [selectedSOS, setSelectedSOS] = useRetainedState<SOSItem | null>('admin-sos-dialog', 'selectedSOS', null)
   const [locationOptions, setLocationOptions] = useState<TypeOption[]>([])
-  const [replyForm, setReplyForm] = useState<{ status: SOSResolutionStatus; reply: string }>({ status: 'PROCESSING', reply: '' })
+  const [replyForm, setReplyForm] = useRetainedState<{ status: SOSResolutionStatus; reply: string }>('admin-sos-dialog', 'replyForm', { status: 'PROCESSING', reply: '' })
   const latestRequestId = useRef(0)
 
   const paginationPages: Array<number | '...'> = (() => {
@@ -100,6 +106,7 @@ export function DesktopLayout() {
       setSosList(response.items || [])
       setTotal(Number(response.total || 0))
       setTotalPages(Math.max(Number(response.pages || 1), 1))
+      if (currentPage > Math.max(Number(response.pages || 1), 1)) setCurrentPage(Math.max(Number(response.pages || 1), 1))
     } catch (error) {
       if (requestId !== latestRequestId.current) return
       setSosList([])
@@ -139,6 +146,7 @@ export function DesktopLayout() {
     setResolving(true)
     try {
       await sosApi.resolveSOS(selectedSOS.id, { status: replyForm.status, reply: replyForm.reply.trim() })
+      invalidateRelatedQueries('sos')
       toast.success(replyForm.status === 'RESOLVED' ? '救援已标记为解决' : '救援处理状态已更新')
       closeResolveDialog()
       await fetchList()
@@ -149,19 +157,9 @@ export function DesktopLayout() {
 
   useEffect(() => {
     void fetchList()
+    return () => { latestRequestId.current += 1 }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 意图为仅挂载执行 / 模拟 Vue watch
-  }, [currentPage])
-
-  const selectedStatusWatchReady = useRef(false)
-  useEffect(() => {
-    if (!selectedStatusWatchReady.current) {
-      selectedStatusWatchReady.current = true
-      return
-    }
-    if (currentPage === 1) void fetchList()
-    else setCurrentPage(1)
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- 意图为仅挂载执行 / 模拟 Vue watch
-  }, [selectedStatus])
+  }, [currentPage, selectedStatus])
 
   useEffect(() => {
     void typeApi.getLocations().then((items) => { setLocationOptions(items) }).catch(() => undefined)

@@ -9,7 +9,8 @@ import { Button } from '@pc/components/ui/button'
 import { Input } from '@pc/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@pc/components/ui/select'
 import { toast } from '@pc/lib/toast'
-import { ArrowLeft, Camera, Cat, CheckCircle2, Image as ImageIcon, MapPin, X } from 'lucide-react'
+import { ArrowLeft, Camera, Cat, CheckCircle2, Image as ImageIcon, X } from 'lucide-react'
+import { clearDraft, readDraft, useDraftSnapshot } from '@shared/drafts'
 
 const campusOptions = Object.entries(CampusMap).map(([value, label]) => ({ value, label }))
 
@@ -17,10 +18,24 @@ export function DesktopLayout() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [typeLoading, setTypeLoading] = useState(false)
-  const [form, setForm] = useState({ tempName: '', color: '', campus: '', location: '', tags: [] as number[], images: [] as File[] })
+  const [form, setForm] = useState(() => ({
+    tempName: '', tags: [] as number[],
+    ...readDraft('new-cat').values,
+    color: String(readDraft('new-cat').values.color ?? ''),
+    campus: String(readDraft('new-cat').values.campus ?? ''),
+    location: String(readDraft('new-cat').values.location ?? ''),
+    images: readDraft('new-cat').files,
+  }))
+  useDraftSnapshot('new-cat', { tempName: form.tempName, color: form.color, campus: form.campus, location: form.location, tags: form.tags }, form.images)
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
+  useEffect(() => {
+    const urls = readDraft('new-cat').files.map((file) => URL.createObjectURL(file))
+    setImagePreviews(urls)
+    return () => urls.forEach((url) => URL.revokeObjectURL(url))
+  }, [])
   const [colorOptions, setColorOptions] = useState<TypeOption[]>([])
   const [tagOptions, setTagOptions] = useState<TagTypeOption[]>([])
+  const [locationOptions, setLocationOptions] = useState<TypeOption[]>([])
   const fileInput = useRef<HTMLInputElement | null>(null)
 
   // 卸载时回收预览 URL 需要读取最新列表，用 ref 镜像
@@ -46,7 +61,7 @@ export function DesktopLayout() {
   }
   const removeImage = (index: number) => { const preview = imagePreviews[index]; if (preview) URL.revokeObjectURL(preview); setForm((prev) => ({ ...prev, images: prev.images.filter((_, i) => i !== index) })); setImagePreviews((prev) => prev.filter((_, i) => i !== index)) }
   const toggleTag = (tagId: number) => { setForm((prev) => ({ ...prev, tags: prev.tags.includes(tagId) ? prev.tags.filter((id) => id !== tagId) : [...prev.tags, tagId] })) }
-  const loadTypeOptions = async () => { setTypeLoading(true); try { const [colors, tags] = await Promise.all([typeApi.getColors(), typeApi.getTags()]); setColorOptions(colors); setTagOptions(tags) } catch (error) { toast.error(error instanceof Error ? error.message : '类型数据加载失败') } finally { setTypeLoading(false) } }
+  const loadTypeOptions = async () => { setTypeLoading(true); try { const [colors, tags, locations] = await Promise.all([typeApi.getColors(), typeApi.getTags(), typeApi.getLocations()]); setColorOptions(colors); setTagOptions(tags); setLocationOptions(locations) } catch (error) { toast.error(error instanceof Error ? error.message : '类型数据加载失败') } finally { setTypeLoading(false) } }
   const submit = async () => {
     if (!form.color) return toast.warning('请选择猫咪花色')
     if (!form.campus) return toast.warning('请选择所在校区')
@@ -64,6 +79,7 @@ export function DesktopLayout() {
         ...(form.tags.length ? { tags: form.tags } : {})
       })
       toast.success(`线索已提交，审核通过后可获得 ${result.experience} 经验和 ${result.currency} 小鱼干`)
+      clearDraft('new-cat')
       navigate('/')
     } catch (error) { toast.error(error instanceof Error ? error.message : '提交失败，请稍后重试') } finally { setLoading(false) }
   }
@@ -152,12 +168,10 @@ export function DesktopLayout() {
                   </SelectContent>
                 </Select></label></div><label className="grid gap-2" htmlFor="new-cat-location"><span
                 className="text-sm font-black">详细位置</span>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-500" /><Input
-                    id="new-cat-location" value={form.location} maxLength={100} placeholder="例如：图书馆东侧台阶旁"
-                    className="border-2 border-black pl-9 focus-visible:ring-[#FACC15]"
-                    onChange={(event) => setForm({ ...form, location: event.target.value })} />
-                </div>
+                <Select value={form.location} disabled={typeLoading} onValueChange={(value) => setForm({ ...form, location: value })}>
+                  <SelectTrigger id="new-cat-location" className="border-2 border-black"><SelectValue placeholder="选择发现位置" /></SelectTrigger>
+                  <SelectContent>{locationOptions.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.label}</SelectItem>)}</SelectContent>
+                </Select>
               </label>
               <section className="grid gap-3">
                 <div className="flex items-center justify-between gap-3"><label className="text-sm font-black">可见特征</label><span

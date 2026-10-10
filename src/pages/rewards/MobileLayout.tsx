@@ -25,9 +25,7 @@ import { getAllBadges, getMe } from '@/api/endpoints/user'
 import { QueryState } from '@/components/feedback/QueryState'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { asArray, asNumber, asRecord, asString } from '@/utils/format'
-
-const AUTO_CHECKIN_TOTAL_DAYS_STORAGE_KEY = 'user:auto-checkin:total-days'
-const AUTO_CHECKIN_CONTINUOUS_DAYS_STORAGE_KEY = 'user:auto-checkin:continuous-days'
+import { useCheckinStore } from '@shared/checkin.store'
 
 type ApiBadge = {
   id: number
@@ -158,15 +156,6 @@ function getTierDropShadow(tier: number): string {
   if (tier === 3) return 'drop-shadow(0 0 13.5px rgba(255, 213, 79, 0.78)) drop-shadow(0 0 16px rgba(255, 160, 0, 0.34))'
   if (tier === 4) return 'drop-shadow(0 0 13.5px rgba(94, 234, 212, 0.76)) drop-shadow(0 0 17px rgba(45, 212, 191, 0.34))'
   return 'drop-shadow(0 0 10px rgba(192, 132, 252, 0.82)) drop-shadow(0 0 18px rgba(236, 72, 153, 0.36))'
-}
-
-function readStoredNumber(key: string): number | null {
-  if (typeof window === 'undefined') return null
-  const raw = window.localStorage.getItem(key)
-  if (!raw) return null
-  const value = Number(raw)
-  if (!Number.isFinite(value) || value < 0) return null
-  return Math.floor(value)
 }
 
 function toFiniteNumber(value: unknown): number | null {
@@ -340,8 +329,8 @@ export function MobileLayout() {
   const programmaticDetailIndexRef = useRef<number | null>(null)
   const [activeBadgeKey, setActiveBadgeKey] = useState<string | null>(null)
   const [detailIndex, setDetailIndex] = useState(0)
-  const checkinTotalDays = readStoredNumber(AUTO_CHECKIN_TOTAL_DAYS_STORAGE_KEY)
-  const checkinContinuousDays = readStoredNumber(AUTO_CHECKIN_CONTINUOUS_DAYS_STORAGE_KEY)
+  const checkinTotalDays = useCheckinStore((state) => state.result?.totalDays)
+  const checkinContinuousDays = useCheckinStore((state) => state.result?.continuousDays)
 
   const meQuery = useQuery({
     queryKey: ['me'],

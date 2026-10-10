@@ -1,5 +1,7 @@
-﻿import { ArrowLeftOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { readDraft, useRetainedState } from '@shared/drafts'
+import { invalidateRelatedQueries } from '@shared/mutationSync'
+import { ArrowLeftOutlined } from '@ant-design/icons'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Button, Modal, message } from 'antd'
 import { useMemo } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -214,7 +216,6 @@ function normalizeAdoptionDetail(value: unknown, fallbackId: string, index = 0, 
 export function MobileLayout() {
   usePageTitle('领养申请详情')
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const { id = '' } = useParams()
   const [searchParams] = useSearchParams()
   const statusParam = normalizeApiStatusParam(searchParams.get('status'))
@@ -295,13 +296,21 @@ export function MobileLayout() {
   const catCampus = normalizeCampus(catRecord.campus || catBasicInfo.campus || detail?.catCampus) || '未知校区'
   const catTags = asArray<string>(catRecord.tags).filter(Boolean)
 
-  const refreshAdoptions = () => queryClient.invalidateQueries({ queryKey: ['admin-adoptions'] })
   const targetId = detail?.id || id
+  const [, setAuditOpen] = useRetainedState('admin-adoptions-dialog', 'auditDialogOpen', false)
+  const [, setAuditReason] = useRetainedState('admin-adoptions-dialog', 'auditReason', '')
+  const auditReason = (status: string, fallback: string) => {
+    const draft = readDraft('admin-adoptions-dialog').values
+    const target = draft.selectedAdoption as { id: string } | null
+    return target?.id === targetId && draft.auditStatus === status && draft.auditReason ? String(draft.auditReason) : fallback
+  }
 
   const interviewMutation = useMutation({
-    mutationFn: () => auditAdoption(targetId, { status: 'INTERVIEW', reason: '进入面谈' }),
+    mutationFn: () => auditAdoption(targetId, { status: 'INTERVIEW', reason: auditReason('INTERVIEW', '进入面谈') }),
     onSuccess: () => {
-      void refreshAdoptions()
+      invalidateRelatedQueries('adoption')
+      setAuditOpen(false)
+      setAuditReason('')
       navigate(`/admin/adoptions/${targetId}?status=INTERVIEW`, { replace: true })
       message.success('已进入待面谈')
     },
@@ -309,9 +318,11 @@ export function MobileLayout() {
   })
 
   const approveMutation = useMutation({
-    mutationFn: () => auditAdoption(targetId, { status: 'APPROVED', reason: '审核通过' }),
+    mutationFn: () => auditAdoption(targetId, { status: 'APPROVED', reason: auditReason('APPROVED', '审核通过') }),
     onSuccess: () => {
-      void refreshAdoptions()
+      invalidateRelatedQueries('adoption')
+      setAuditOpen(false)
+      setAuditReason('')
       navigate(`/admin/adoptions/${targetId}?status=APPROVED`, { replace: true })
       message.success('已通过申请')
     },
@@ -319,9 +330,11 @@ export function MobileLayout() {
   })
 
   const rejectMutation = useMutation({
-    mutationFn: () => auditAdoption(targetId, { status: 'REJECTED', reason: '不符合领养要求' }),
+    mutationFn: () => auditAdoption(targetId, { status: 'REJECTED', reason: auditReason('REJECTED', '不符合领养要求') }),
     onSuccess: () => {
-      void refreshAdoptions()
+      invalidateRelatedQueries('adoption')
+      setAuditOpen(false)
+      setAuditReason('')
       navigate(`/admin/adoptions/${targetId}?status=REJECTED`, { replace: true })
       message.success('已驳回申请')
     },

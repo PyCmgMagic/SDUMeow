@@ -11,17 +11,15 @@ import { asRecord, asString } from '@/utils/format'
 import { storage } from '@/utils/storage'
 import { isAppPath, withAppBasePath } from '@/utils/appPath'
 import { UserRole } from '@/types/enums'
-import type { SessionScope } from '@shared/session'
+import { getSessionRevision, type SessionScope } from '@shared/session'
+import { refreshSession } from '@shared/refresh'
+import { queryClient } from '@shared/queryClient'
 
 type RetriableRequestConfig<TBody = unknown> = ApiRequestConfig<TBody> & {
   _retry?: boolean
   _skipAuthRefresh?: boolean
   _authScope?: SessionScope
-}
-
-type TokenPair = {
-  accessToken?: string
-  refreshToken?: string
+  _sessionRevision?: number
 }
 
 function isRefreshRequest(url?: string): boolean {
@@ -53,6 +51,8 @@ httpClient.interceptors.request.use((config) => {
   const retriableConfig = config as RetriableRequestConfig
   const scope = resolveAuthScope(retriableConfig)
   retriableConfig._authScope = scope
+  retriableConfig._sessionRevision ??= getSessionRevision(scope)
+  if (retriableConfig._sessionRevision !== getSessionRevision(scope)) throw new axios.CanceledError('登录会话已变更')
   const token = storage.getToken(scope)
   const refreshToken = storage.getRefreshToken(scope)
   if (token) {
@@ -67,8 +67,9 @@ httpClient.interceptors.request.use((config) => {
 })
 
 function clearSession(scope: SessionScope) {
-  storage.clearToken(scope)
-  useAuthStore.getState().logout()
+  const state = useAuthStore.getState()
+  if (scope === 'admin') state.adminLogout()
+  else state.logout()
 }
 
 function markLoginNotice() {
@@ -107,64 +108,25 @@ function promptRelogin(scope: SessionScope) {
   clearSession(scope)
   const loginPath = scope === 'admin' ? '/admin/login' : '/login'
   if (!isAppPath(window.location.pathname, loginPath)) {
-    window.location.replace(withAppBasePath(loginPath))
+    const redirect = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    window.location.replace(`${withAppBasePath(loginPath)}?${new URLSearchParams({ expired: '1', redirect })}`)
   }
-}
-
-function pickTokens(payload: unknown): TokenPair {
-  const data = asRecord(payload)
-  return {
-    accessToken: asString(data.accessToken || data.token || data.meowToken),
-    refreshToken: asString(data.refreshToken || data.meowRefreshToken),
-  }
-}
-
-async function refreshAccessToken(scope: SessionScope): Promise<string | null> {
-  const currentRefreshToken = storage.getRefreshToken(scope)
-  if (!currentRefreshToken) {
-    return null
-  }
-
-  const response = await httpClient.request<ApiResult<unknown>>({
-    method: 'POST',
-    url: '/users/refresh',
-    authScope: scope,
-    _skipAuthRefresh: true,
-  } as RetriableRequestConfig)
-  const tokens = pickTokens(response.data.data)
-  const nextAccessToken = tokens.accessToken?.trim()
-  if (!nextAccessToken) {
-    return null
-  }
-
-  storage.setTokens(
-    {
-      token: nextAccessToken,
-      refreshToken: tokens.refreshToken?.trim() || currentRefreshToken,
-    },
-    scope,
-  )
-
-  const authState = useAuthStore.getState()
-  if (authState.role) {
-    authState.login({
-      token: nextAccessToken,
-      role: authState.role,
-      profile: authState.profile,
-    })
-  }
-
-  return nextAccessToken
 }
 
 httpClient.interceptors.response.use(
   (response: AxiosResponse) => {
+    const config = response.config as RetriableRequestConfig
+    if (config._sessionRevision !== getSessionRevision(resolveAuthScope(config))) throw new axios.CanceledError('登录会话已变更')
     response.data = normalizeApiEnvelope(response.data)
+    if ([0, 200].includes(response.data.code) && config.method && !['get', 'head'].includes(config.method) && !isRefreshRequest(config.url)) {
+      void queryClient.invalidateQueries({ refetchType: 'none' })
+    }
     return response
   },
   async (error) => {
     const originalConfig = error?.config as RetriableRequestConfig | undefined
     const scope = resolveAuthScope(originalConfig)
+    if (originalConfig && originalConfig._sessionRevision !== getSessionRevision(scope)) return Promise.reject(new axios.CanceledError('登录会话已变更'))
     const activeToken = storage.getToken(scope)
 
     if (
@@ -177,24 +139,20 @@ httpClient.interceptors.response.use(
       originalConfig._retry = true
 
       try {
-        const nextAccessToken = await refreshAccessToken(scope)
+        const nextAccessToken = await refreshSession(scope)
         if (nextAccessToken) {
           originalConfig.headers = originalConfig.headers ?? {}
           originalConfig.headers.Authorization = `Bearer ${nextAccessToken}`
           return httpClient.request(originalConfig)
         }
       } catch {
+        if (originalConfig._sessionRevision !== getSessionRevision(scope)) return Promise.reject(new axios.CanceledError('登录会话已变更'))
         // Fall through to the normal logout path below.
       }
     }
 
     if (error?.response?.status === 401 && activeToken) {
-      markLoginNotice()
-      clearSession(scope)
-      const loginPath = scope === 'admin' ? '/admin/login' : '/login'
-      if (!isAppPath(window.location.pathname, loginPath)) {
-        window.location.replace(withAppBasePath(loginPath))
-      }
+      promptRelogin(scope)
     }
 
     if (activeToken && shouldPromptRelogin(error)) {

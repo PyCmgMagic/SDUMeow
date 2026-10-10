@@ -1,4 +1,7 @@
-import { useEffect, useState, type ComponentType } from 'react'
+import { invalidateRelatedQueries } from '@shared/mutationSync'
+import { readDraft, useRetainedState } from '@shared/drafts'
+import { useEffect, useRef, useState, type ComponentType } from 'react'
+import { useListFilters } from '@shared/useListFilters'
 import { adminAnnouncementApi } from '@pc/lib/api'
 import {
   AnnouncementLegacyTypeMap,
@@ -107,6 +110,7 @@ const formatTime = (value?: string) => {
 }
 
 export function DesktopLayout() {
+  const filters = useListFilters(['DRAFT', 'PUBLISHED'])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -114,19 +118,27 @@ export function DesktopLayout() {
   const [items, setItems] = useState<Announcement[]>([])
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [statusFilter, setStatusFilter] = useState<'' | AnnouncementStatus>('')
+  const currentPage = filters.page
+  const setCurrentPage = filters.setPage
+  const statusFilter = filters.status as '' | AnnouncementStatus
+  const latestRequestId = useRef(0)
 
-  const [editorOpen, setEditorOpen] = useState(false)
-  const [editingId, setEditingId] = useState('')
+  const [editorOpen, setEditorOpen] = useRetainedState('admin-announcements-dialog', 'editorOpen', false)
+  const [editingId, setEditingId] = useRetainedState('admin-announcements-dialog', 'editingId', '')
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deletingItem, setDeletingItem] = useState<Announcement | null>(null)
 
-  const [form, setForm] = useState<AnnouncementInput>(emptyForm)
+  const [form, setForm] = useRetainedState<AnnouncementInput>('admin-announcements-dialog', 'form', emptyForm)
+  const closeEditor = () => {
+    setEditorOpen(false)
+    setEditingId('')
+    setForm(emptyForm())
+  }
 
   const publishedCount = items.filter((item) => isPublished(item.status)).length
 
   const fetchList = async (statusOverride?: '' | AnnouncementStatus) => {
+    const requestId = ++latestRequestId.current
     setLoading(true)
     setListError('')
     try {
@@ -136,10 +148,13 @@ export function DesktopLayout() {
         status: (statusOverride ?? statusFilter) || undefined
       })
       const resolvedItems = pageItems(data)
+      if (requestId !== latestRequestId.current) return
       setItems(resolvedItems)
       setTotal(Number(data.total ?? resolvedItems.length))
       setTotalPages(Math.max(Number(data.totalPage ?? data.pages ?? 1), 1))
+      if (currentPage > Math.max(Number(data.totalPage ?? data.pages ?? 1), 1)) setCurrentPage(Math.max(Number(data.totalPage ?? data.pages ?? 1), 1))
     } catch (error) {
+      if (requestId !== latestRequestId.current) return
       console.error('Failed to load announcements', error)
       setItems([])
       setTotal(0)
@@ -147,19 +162,21 @@ export function DesktopLayout() {
       setListError('公告列表暂时无法加载，请稍后重试。')
       toast.error('获取公告列表失败')
     } finally {
-      setLoading(false)
+      if (requestId === latestRequestId.current) setLoading(false)
     }
   }
 
   const openCreate = () => {
+    const saved = readDraft('admin-announcements-dialog').values
     setEditingId('')
-    setForm(emptyForm())
+    setForm(saved.editingId === '' && saved.form ? saved.form as AnnouncementInput : emptyForm())
     setEditorOpen(true)
   }
 
   const openEdit = (item: Announcement) => {
+    const saved = readDraft('admin-announcements-dialog').values
     setEditingId(item.id)
-    setForm({
+    setForm(saved.editingId === item.id && saved.form ? saved.form as AnnouncementInput : {
       title: item.title,
       content: item.content,
       summary: item.summary || '',
@@ -193,7 +210,10 @@ export function DesktopLayout() {
       }
 
       setEditorOpen(false)
+      setForm(emptyForm())
+      setEditingId('')
       await fetchList()
+      invalidateRelatedQueries('announcement')
     } finally {
       setSaving(false)
     }
@@ -209,6 +229,7 @@ export function DesktopLayout() {
     setDeleting(true)
     try {
       await adminAnnouncementApi.deleteAnnouncement(deletingItem.id)
+      invalidateRelatedQueries('announcement')
       toast.success('公告已删除')
       setDeleteOpen(false)
       setDeletingItem(null)
@@ -224,16 +245,15 @@ export function DesktopLayout() {
   }
 
   const onStatusFilterChange = (value: '' | AnnouncementStatus) => {
-    setStatusFilter(value)
-    if (currentPage === 1) void fetchList(value)
-    else setCurrentPage(1)
+    filters.setStatus(value)
   }
 
   // 对应 Vue 的 watch(currentPage) + onMounted：挂载与翻页时拉取列表。
   useEffect(() => {
     void fetchList()
+    return () => { latestRequestId.current += 1 }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage])
+  }, [currentPage, statusFilter])
 
   return (
     <div className="flex flex-col gap-6">
@@ -343,7 +363,7 @@ export function DesktopLayout() {
         ) : null}
       </section>
 
-      <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
+      <Dialog open={editorOpen} onOpenChange={(open) => open ? setEditorOpen(true) : closeEditor()}>
         <DialogContent className="admin-dialog max-h-[90vh] overflow-y-auto border-2 border-black p-0 sm:max-w-3xl">
           <DialogHeader className="admin-dialog-header border-b-2 border-black bg-[#FFF8DE] px-6 py-5 pr-14"><DialogTitle className="text-xl font-black">{editingId ? '编辑公告' : '新建公告'}</DialogTitle><DialogDescription>保存为草稿，或在确认后直接发布给所有用户。</DialogDescription></DialogHeader>
           <div className="grid gap-5 px-6 py-5 sm:grid-cols-2">
@@ -354,7 +374,7 @@ export function DesktopLayout() {
             <label className="flex flex-col gap-2 sm:col-span-2" htmlFor="announcement-cover"><span className="text-sm font-black text-gray-900">封面 URL 或 COS Key <span className="font-medium text-gray-500">（可选）</span></span><Input id="announcement-cover" value={form.coverImage} onChange={(event) => setForm((current) => ({ ...current, coverImage: event.target.value }))} placeholder="https://... 或 meow/..." className="border-2 border-black focus-visible:ring-[#FACC15]" /></label>
             <label className="flex flex-col gap-2 sm:col-span-2" htmlFor="announcement-content"><span className="text-sm font-black text-gray-900">正文</span><Textarea id="announcement-content" value={form.content} onChange={(event) => setForm((current) => ({ ...current, content: event.target.value }))} className="min-h-56 border-2 border-black focus-visible:ring-[#FACC15]" placeholder="输入公告正文" /></label>
           </div>
-          <DialogFooter className="admin-dialog-footer border-t-2 border-black bg-[#F3F4F6] px-6 py-4"><Button variant="outline" className="admin-secondary-action border-2 border-black font-bold" disabled={saving} onClick={() => setEditorOpen(false)}>取消</Button><Button className="admin-primary-action border-2 border-black bg-[#5CD6C2] font-bold text-black shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:bg-[#48C4B1]" disabled={saving} onClick={() => void saveAnnouncement()}><Send className="size-4" aria-hidden="true" />{saving ? '保存中...' : form.status === 'PUBLISHED' ? '发布公告' : '保存草稿'}</Button></DialogFooter>
+          <DialogFooter className="admin-dialog-footer border-t-2 border-black bg-[#F3F4F6] px-6 py-4"><Button variant="outline" className="admin-secondary-action border-2 border-black font-bold" disabled={saving} onClick={closeEditor}>取消</Button><Button className="admin-primary-action border-2 border-black bg-[#5CD6C2] font-bold text-black shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:bg-[#48C4B1]" disabled={saving} onClick={() => void saveAnnouncement()}><Send className="size-4" aria-hidden="true" />{saving ? '保存中...' : form.status === 'PUBLISHED' ? '发布公告' : '保存草稿'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 

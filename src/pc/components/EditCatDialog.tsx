@@ -20,6 +20,8 @@ import { IMAGE_FILE_ACCEPT, isSupportedImageFile, uploadImages } from '@pc/lib/u
 import { toast } from '@pc/lib/toast'
 import { ImagePlus, Sparkles, Trash2 } from 'lucide-react'
 import { cn } from '@pc/lib/utils'
+import { clearDraft, readDraft, useDraftSnapshot } from '@shared/drafts'
+import { invalidateRelatedQueries } from '@shared/mutationSync'
 
 export interface EditCatDialogProps {
   open?: boolean
@@ -51,6 +53,8 @@ const dateInputValue = (value?: string | null) => value ? value.slice(0, 10) : '
 
 export function EditCatDialog(props: EditCatDialogProps) {
   const { open = false, catData = null, onOpenChange, onSuccess } = props
+  const draftKey = `admin-cat-edit-${catData?.id || 'new'}` as const
+  const [initialized, setInitialized] = useState(false)
 
   const [submitting, setSubmitting] = useState(false)
   const [typeLoading, setTypeLoading] = useState(false)
@@ -93,6 +97,7 @@ export function EditCatDialog(props: EditCatDialogProps) {
       appearance: 5
     }
   })
+  useDraftSnapshot(draftKey, open && initialized ? { source: 'pc', pc: formData, existingImages, deletedImageKeys, newImageFiles } : undefined, avatarFile ? [avatarFile] : [])
 
   const applyNewImagePreviews = (next: Array<{ file: File; url: string }>) => {
     newImagePreviewsRef.current = next
@@ -135,15 +140,44 @@ export function EditCatDialog(props: EditCatDialogProps) {
         appearance: cat?.attributes?.appearance ?? 5
       }
     })
+    const saved = readDraft(draftKey)
+    if (saved.values.pc) setFormData(saved.values.pc as typeof formData)
+    const mobile = saved.values.mobile as Record<string, unknown> | undefined
+    if (mobile && saved.values.source === 'mobile') setFormData((prev) => ({
+      ...prev,
+      name: String(mobile.name ?? prev.name), color: String(mobile.color ?? prev.color),
+      gender: String(({ UNKNOWN: 0, MALE: 1, FEMALE: 2 } as Record<string, number>)[String(mobile.gender)] ?? prev.gender),
+      campus: String(mobile.campus ?? prev.campus), role: String(mobile.role ?? prev.role),
+      hauntLocation: String(mobile.location ?? prev.hauntLocation),
+      status: String(({ SCHOOL: 0, GRADUATED: 1, MEOW_STAR: 2, HOSPITAL: 3, ADOPTION_HANDOVER: 4 } as Record<string, number>)[String(mobile.status)] ?? prev.status),
+      isNeutered: mobile.neuteredType !== 'NONE', neuteredType: mobile.neuteredType === 'EAR_CUT' ? '0' : '1',
+      neuteredDate: String(mobile.neuteredDate ?? prev.neuteredDate), description: String(mobile.description ?? prev.description),
+      tags: (mobile.tags as number[] | undefined) ?? prev.tags,
+      attributes: {
+        friendliness: Number(mobile.friendlinessScore ?? 50) / 10, gluttony: Number(mobile.gluttonyScore ?? 50) / 10,
+        fight: Number(mobile.fightScore ?? 50) / 10, appearance: Number(mobile.appearanceScore ?? 50) / 10,
+      },
+    }))
+    if (saved.files[0]) {
+      setAvatarFile(saved.files[0])
+      avatarPreviewUrlRef.current = URL.createObjectURL(saved.files[0])
+      setFormData((prev) => ({ ...prev, avatar: avatarPreviewUrlRef.current }))
+    }
   }
 
   const loadExistingImages = async () => {
     resetGallery()
     if (!catData) return
+    const savedImages = readDraft(draftKey).values.existingImages as CatImageKeyItem[] | undefined
+    if (savedImages) {
+      setExistingImages(savedImages)
+      return
+    }
     setGalleryLoading(true)
     try {
       const result = await catApi.getImageKeys(catData.id)
-      setExistingImages(result.images || [])
+      const saved = readDraft(draftKey).values
+      setExistingImages((saved.existingImages as CatImageKeyItem[] | undefined) ?? result.images ?? [])
     } catch (error) {
       toast.warning(error instanceof Error ? `档案图片加载失败：${error.message}` : '档案图片加载失败')
     } finally {
@@ -257,6 +291,8 @@ export function EditCatDialog(props: EditCatDialogProps) {
         await catApi.addCat({ ...commonData, avatar: avatarKey, images: addedImageKeys } satisfies CreateCatParams)
       }
       toast.success(catData ? '猫咪档案已保存' : '猫咪档案已创建')
+      clearDraft(draftKey)
+      invalidateRelatedQueries('cat', catData?.id)
       onSuccess?.();
       onOpenChange?.(false)
     } catch (error) {
@@ -266,13 +302,28 @@ export function EditCatDialog(props: EditCatDialogProps) {
     }
   }
   useEffect(() => {
+    let cancelled = false
+    setInitialized(false)
     if (!open) { setSubmitting(false); resetGallery(); return }
     void (async () => {
-      try { await loadOptions(); initializeForm(); await loadExistingImages() }
+      try {
+        await loadOptions()
+        if (cancelled) return
+        initializeForm()
+        await loadExistingImages()
+        if (cancelled) return
+        const saved = readDraft(draftKey).values
+        setDeletedImageKeys((saved.deletedImageKeys as string[] | undefined) ?? [])
+        const files = (saved.newImageFiles as File[] | undefined) ?? []
+        setNewImageFiles(files)
+        applyNewImagePreviews(files.map((file) => ({ file, url: URL.createObjectURL(file) })))
+        setInitialized(true)
+      }
       catch (error) {
         toast.error(error instanceof Error ? error.message : '类型数据加载失败')
       }
     })()
+    return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 挂载/打开时初始化表单，函数引用随闭包更新
   }, [open])
   useEffect(() => {
@@ -280,7 +331,10 @@ export function EditCatDialog(props: EditCatDialogProps) {
   }, [])
 
   return (
-    <Dialog open={open} onOpenChange={(value) => onOpenChange?.(value)}>
+    <Dialog open={open} onOpenChange={(value) => {
+      if (!value) clearDraft(draftKey)
+      onOpenChange?.(value)
+    }}>
       <DialogContent className="admin-dialog max-h-[90vh] overflow-y-auto border-2 border-black p-0 sm:max-w-4xl">
         <DialogHeader className="admin-dialog-header border-b-2 border-black bg-[#DDF8F2] px-6 py-5 pr-14">
           <DialogTitle className="flex items-center gap-2 text-xl font-black">

@@ -10,6 +10,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@pc/components/ui/avatar'
 import { Button } from '@pc/components/ui/button'
 import { Input } from '@pc/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@pc/components/ui/select'
+import { clearDraft, readDraft, useDraftSnapshot } from '@shared/drafts'
+import { queryClient } from '@shared/queryClient'
 
 const campusOptions = Object.entries(CampusMap).map(([value, label]) => ({ value, label }))
 
@@ -17,20 +19,23 @@ export function DesktopLayout() {
   const navigate = useNavigate()
   const updateProfile = useUserStore((s) => s.updateProfile)
   const [loading, setLoading] = useState(false)
-  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [initialDraft] = useState(() => readDraft('me-edit').values)
+  const [avatarFile, setAvatarFile] = useState<File | null>(() => readDraft('me-edit').files[0] ?? null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [originalAvatar, setOriginalAvatar] = useState('')
   const [avatarLoadFailed, setAvatarLoadFailed] = useState(false)
   // 对应源码里的 let avatarPreviewUrl（非响应式普通变量，用 ref 保持）
   const avatarPreviewUrlRef = useRef('')
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(() => ({
     nickname: '',
     campus: '',
     avatar: '',
     wechat: '',
     phone: '',
-  })
+    ...readDraft('me-edit').values,
+  }))
+  useDraftSnapshot('me-edit', { nickname: form.nickname, campus: form.campus, wechat: form.wechat, phone: form.phone }, avatarFile ? [avatarFile] : [])
 
   const campusNumber = Number(form.campus)
   const previewCampus = Number.isNaN(campusNumber) ? form.campus || '尚未选择校区' : CampusMap[campusNumber] || '尚未选择校区'
@@ -41,13 +46,15 @@ export function DesktopLayout() {
     const userInfo = useUserStore.getState().userInfo
     if (!userInfo) return
 
-    setForm({
+    setForm((previous) => ({
+      ...previous,
       nickname: userInfo.nickname || '',
       campus: userInfo.campus === undefined || userInfo.campus === null ? '' : String(userInfo.campus),
       avatar: userInfo.avatar || '',
       wechat: userInfo.contact?.wechat || '',
       phone: userInfo.contact?.phone || '',
-    })
+      ...initialDraft,
+    }))
     setOriginalAvatar(userInfo.avatar || '')
     setAvatarLoadFailed(false)
   }
@@ -55,9 +62,14 @@ export function DesktopLayout() {
   // 挂载时同步用户信息；卸载时回收头像预览 URL（对应 onMounted + onBeforeUnmount）
   useEffect(() => {
     syncUserInfo()
+    if (avatarFile) {
+      avatarPreviewUrlRef.current = URL.createObjectURL(avatarFile)
+      setForm((previous) => ({ ...previous, avatar: avatarPreviewUrlRef.current }))
+    }
     return () => {
       if (avatarPreviewUrlRef.current) URL.revokeObjectURL(avatarPreviewUrlRef.current)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 初始化当前布局的头像预览
   }, [])
 
   const triggerUpload = () => fileInputRef.current?.click()
@@ -113,6 +125,9 @@ export function DesktopLayout() {
         contact: { phone, wechat },
       }, avatarKey)
       toast.success('资料已保存')
+      clearDraft('me-edit')
+      void queryClient.invalidateQueries({ queryKey: ['me'] })
+      void queryClient.invalidateQueries({ queryKey: ['me-edit'] })
       navigate('/me')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '保存失败，请重试')
@@ -122,6 +137,7 @@ export function DesktopLayout() {
   }
 
   const handleCancel = () => {
+    clearDraft('me-edit')
     if (window.history.length > 1) navigate(-1)
     else navigate('/me')
   }

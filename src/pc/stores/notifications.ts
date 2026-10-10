@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 import { announcementApi, notificationApi } from '@pc/lib/api'
 import { getAccessToken } from '@pc/lib/auth'
+import { getSessionRevision } from '@shared/session'
+import { useAuthStore } from '@shared/auth.store'
+import { ANNOUNCEMENT_SEEN_EVENT, getNewAnnouncementCount, markAnnouncementsSeen, readAnnouncementSeenAt } from '@shared/announcementNotifications'
 import type {
   Announcement,
   FlexiblePageResult,
@@ -8,7 +11,6 @@ import type {
   NotificationQueryParams
 } from '@pc/types'
 
-const ANNOUNCEMENT_SEEN_KEY = 'lastSeenAnnouncementId'
 const POLL_INTERVAL = 45_000
 
 const pageItems = <T>(data: FlexiblePageResult<T> | T[] | undefined): T[] => {
@@ -82,7 +84,7 @@ interface NotificationStore {
   loading: boolean
   errorMessage: string
   previewLoading: boolean
-  lastSeenAnnouncementId: string
+  announcementSeenAt: number
   badgeCount: () => number
   fetchPage: (params?: NotificationQueryParams) => Promise<NotificationItem[]>
   fetchPreview: () => Promise<void>
@@ -99,7 +101,7 @@ let pageRequestId = 0
 
 export const useNotificationStore = create<NotificationStore>()((set, get) => {
   const fetchAnnouncements = async () => {
-    const data = await announcementApi.getAnnouncements({ page: 1, pageSize: 5 })
+    const data = await announcementApi.getAnnouncements({ page: 1, pageSize: 100 })
     set({ latestAnnouncements: pageItems(data) })
   }
 
@@ -126,12 +128,10 @@ export const useNotificationStore = create<NotificationStore>()((set, get) => {
     loading: false,
     errorMessage: '',
     previewLoading: false,
-    lastSeenAnnouncementId: localStorage.getItem(ANNOUNCEMENT_SEEN_KEY) || '',
+    announcementSeenAt: readAnnouncementSeenAt(),
     badgeCount: () => {
-      const { unreadCount, latestAnnouncements, lastSeenAnnouncementId } = get()
-      const latestId = latestAnnouncements[0]?.id
-      const hasNewAnnouncement = Boolean(latestId && latestId !== lastSeenAnnouncementId)
-      return unreadCount + (hasNewAnnouncement ? 1 : 0)
+      const { unreadCount, latestAnnouncements, announcementSeenAt } = get()
+      return unreadCount + getNewAnnouncementCount(latestAnnouncements, announcementSeenAt)
     },
 
     fetchPage: async (params: NotificationQueryParams = {}) => {
@@ -164,6 +164,7 @@ export const useNotificationStore = create<NotificationStore>()((set, get) => {
     },
 
     fetchPreview: async () => {
+      const revision = getSessionRevision('user')
       set({ previewLoading: true })
       try {
         const tasks: Promise<unknown>[] = [fetchAnnouncements()]
@@ -171,10 +172,10 @@ export const useNotificationStore = create<NotificationStore>()((set, get) => {
         if (getAccessToken()) {
           tasks.push(
             notificationApi.getNotifications({ page: 1, pageSize: 5 }).then((data) => {
-              set({ previewNotifications: pageItems(data).map(normalizeNotification) })
+              if (revision === getSessionRevision('user')) set({ previewNotifications: pageItems(data).map(normalizeNotification) })
             }),
             notificationApi.getNotifications({ isRead: false, page: 1, pageSize: 1 }).then((data) => {
-              set({ unreadCount: pageTotal(data) })
+              if (revision === getSessionRevision('user')) set({ unreadCount: pageTotal(data) })
             })
           )
         } else {
@@ -186,7 +187,7 @@ export const useNotificationStore = create<NotificationStore>()((set, get) => {
 
         await Promise.allSettled(tasks)
       } finally {
-        set({ previewLoading: false })
+        if (revision === getSessionRevision('user')) set({ previewLoading: false })
       }
     },
 
@@ -213,10 +214,8 @@ export const useNotificationStore = create<NotificationStore>()((set, get) => {
     },
 
     markAnnouncementsSeen: () => {
-      const latestId = get().latestAnnouncements[0]?.id
-      if (!latestId) return
-      set({ lastSeenAnnouncementId: latestId })
-      localStorage.setItem(ANNOUNCEMENT_SEEN_KEY, latestId)
+      markAnnouncementsSeen()
+      set({ announcementSeenAt: readAnnouncementSeenAt() })
     },
 
     startPolling: () => {
@@ -237,9 +236,18 @@ export const useNotificationStore = create<NotificationStore>()((set, get) => {
         total: 0,
         totalPages: 1,
         errorMessage: '',
+        loading: false,
+        previewLoading: false,
       })
       pageRequestId += 1
       stopPolling()
     },
   }
 })
+
+useAuthStore.subscribe((state, previous) => {
+  if (state.authRevision !== previous.authRevision || state.role !== previous.role) useNotificationStore.getState().reset()
+})
+const syncAnnouncementSeen = () => useNotificationStore.setState({ announcementSeenAt: readAnnouncementSeenAt() })
+window.addEventListener(ANNOUNCEMENT_SEEN_EVENT, syncAnnouncementSeen)
+window.addEventListener('storage', syncAnnouncementSeen)

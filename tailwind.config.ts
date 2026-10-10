@@ -24,7 +24,7 @@ const config = {
     },
     extend: {
       colors: {
-        // === SDU Meow 项目自定义颜色（桌面端） ===
+        // === MEOW 项目自定义颜色（桌面端） ===
         'meow-dark': 'hsl(var(--meow-dark) / <alpha-value>)',
         'meow-bg': 'hsl(var(--meow-bg) / <alpha-value>)',
         'meow-card': 'hsl(var(--meow-card) / <alpha-value>)',

@@ -1,5 +1,7 @@
+import { readDraft, useDraftSnapshot } from '@shared/drafts'
+import { invalidateRelatedQueries } from '@shared/mutationSync'
 import { CheckCircleFilled, CloseCircleFilled, SearchOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Button, Form, Input, Modal, message } from 'antd'
 import clsx from 'clsx'
 import { useEffect, useMemo, useState } from 'react'
@@ -11,11 +13,15 @@ import { QueryState } from '@/components/feedback/QueryState'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { asArray, asRecord, asString, formatTimestampText, toPaged } from '@/utils/format'
 import { normalizeMediaUrl } from '@/utils/media'
+import { useListFilters, ADMIN_PAGE_SIZE } from '@shared/useListFilters'
+import { ListPagination } from '@shared/ListPagination'
+import { filterPagedList } from '@shared/filterPagedList'
 
 type ReviewStatus = 'pending' | 'approved' | 'rejected'
 type ReviewFilter = 'all' | 'pending' | 'approved' | 'rejected'
 
 type NewCatReviewItem = {
+  raw: Record<string, unknown>
   id: string
   name: string
   avatar: string
@@ -116,6 +122,7 @@ function normalizeNewCats(payload: unknown, tagOptions: DynamicTypeOption[]): Ne
     const location = asString(row.location || row.locationName || basicInfo.hauntLocation, campus || '未知地点')
 
     return {
+      raw: row,
       id: asString(row.id || row.newCatId, ''),
       name: asString(row.tempName || row.name || row.catName, `新猫咪${index + 1}`),
       avatar: normalizeMediaUrl(row.avatar || row.image || images[0]),
@@ -123,7 +130,7 @@ function normalizeNewCats(payload: unknown, tagOptions: DynamicTypeOption[]): Ne
       color,
       campus,
       location,
-      reporter: asString(row.userName || row.reporterName || row.nickname, '匿名用户'),
+      reporter: asString(row.submitterName || row.userName || row.reporterName || row.nickname, '匿名用户'),
       createdAt: formatTimestampText(row.createdAt || row.createTime || row.time, '刚刚提交'),
       tags: normalizeReviewTags(row.tagNames || row.tags || row.tagIds, tagOptions),
     }
@@ -144,34 +151,52 @@ const statusText: Record<ReviewStatus, string> = {
 
 export function MobileLayout() {
   usePageTitle('审核新猫')
-  const queryClient = useQueryClient()
-  const [activeFilter, setActiveFilter] = useState<ReviewFilter>('all')
-  const [keywordInput, setKeywordInput] = useState('')
-  const [keyword, setKeyword] = useState('')
+  const filtersState = useListFilters(['PENDING', 'APPROVED', 'REJECTED'])
+  const { page, search: keywordInput, setSearch: setKeywordInput } = filtersState
+  const activeFilter = (filtersState.status.toLowerCase() || 'all') as ReviewFilter
+  const setActiveFilter = (filter: ReviewFilter) => filtersState.setStatus(filter === 'all' ? '' : filter.toUpperCase())
+  const keyword = keywordInput.trim().toLowerCase()
   const [statusOverride, setStatusOverride] = useState<Record<string, ReviewStatus>>({})
-  const [approveTarget, setApproveTarget] = useState<NewCatReviewItem | null>(null)
-  const [rejectTarget, setRejectTarget] = useState<NewCatReviewItem | null>(null)
+  const [approveTarget, setApproveTarget] = useState<NewCatReviewItem | null>(() => {
+    const draft = readDraft('admin-new-cats-dialog').values
+    return draft.approveDialogOpen && draft.approveItem ? normalizeNewCats([draft.approveItem], [])[0] ?? null : null
+  })
+  const [rejectTarget, setRejectTarget] = useState<NewCatReviewItem | null>(() => {
+    const draft = readDraft('admin-new-cats-dialog').values
+    return draft.rejectDialogOpen && draft.rejectItem ? normalizeNewCats([draft.rejectItem], [])[0] ?? null : null
+  })
   const [approveForm] = Form.useForm<ApproveFormValues>()
   const [rejectForm] = Form.useForm<RejectFormValues>()
+  const [initialDraft] = useState(() => readDraft('admin-new-cats-dialog').values)
+  const approval = Form.useWatch([], { form: approveForm, preserve: true }) as ApproveFormValues | undefined
+  const rejection = Form.useWatch([], { form: rejectForm, preserve: true }) as RejectFormValues | undefined
+  useEffect(() => {
+    approveForm.setFieldsValue((initialDraft.approveForm as ApproveFormValues | undefined) ?? { officialName: '' })
+    rejectForm.setFieldsValue({ reply: String(initialDraft.rejectReason ?? '') })
+  }, [approveForm, rejectForm, initialDraft])
+  useDraftSnapshot('admin-new-cats-dialog', {
+    approveDialogOpen: !!approveTarget, approveItem: approveTarget?.raw ?? null,
+    approveForm: approveTarget ? approval ?? initialDraft.approveForm ?? { officialName: '' } : { officialName: '' },
+    rejectDialogOpen: !!rejectTarget, rejectItem: rejectTarget?.raw ?? null,
+    rejectReason: rejectTarget ? rejection?.reply ?? initialDraft.rejectReason ?? '' : '',
+  })
 
-  const query = useQuery({ queryKey: ['admin-new-cats'], queryFn: getAdminNewCats })
+  const query = useQuery({ refetchOnMount: 'always', queryKey: ['admin-new-cats', page, filtersState.status, keyword], queryFn: async () => {
+    const load = async (page: number, pageSize: number) => (await getAdminNewCats({ page, pageSize, status: filtersState.status || undefined })).data
+    if (!keyword) return getAdminNewCats({ page, pageSize: ADMIN_PAGE_SIZE, status: filtersState.status || undefined })
+    const data = await filterPagedList<Record<string, unknown>>(load, page, (row) =>
+      [row.id, row.tempName, row.officialName, row.campus, row.location, row.submitterName || row.userName || row.reporterName || row.nickname].join(' ').toLowerCase().includes(keyword))
+    return { data }
+  } })
   const tagsQuery = useQuery({ queryKey: ['type', 'tags'], queryFn: getTags })
   const tagOptions = useMemo(() => normalizeDynamicTypeOptions(tagsQuery.data?.data), [tagsQuery.data?.data])
   const items = useMemo(() => normalizeNewCats(query.data?.data, tagOptions), [query.data?.data, tagOptions])
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => setKeyword(keywordInput.trim().toLowerCase()), 250)
-    return () => window.clearTimeout(timer)
-  }, [keywordInput])
-
   const displayedItems = useMemo(() => {
     const merged = items.map((item) => ({ ...item, status: statusOverride[item.id] ?? item.status }))
     const filtered = activeFilter === 'all' ? merged : merged.filter((item) => item.status === activeFilter)
-    if (!keyword) return filtered
-    return filtered.filter((item) =>
-      [item.name, item.color, item.campus, item.location, item.reporter, item.createdAt, ...item.tags].join(' ').toLowerCase().includes(keyword),
-    )
-  }, [activeFilter, items, keyword, statusOverride])
+    return filtered
+  }, [activeFilter, items, statusOverride])
 
   const counts = useMemo(() => {
     const merged = items.map((item) => ({ ...item, status: statusOverride[item.id] ?? item.status }))
@@ -190,9 +215,8 @@ export function MobileLayout() {
       setStatusOverride((current) => ({ ...current, [item.id]: 'approved' }))
       setApproveTarget(null)
       approveForm.resetFields()
+      invalidateRelatedQueries('new-cat')
       message.success('审核通过')
-      void queryClient.invalidateQueries({ queryKey: ['admin-new-cats'] })
-      void queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] })
     },
     onError: (error) => message.error(error instanceof Error ? error.message : '审核失败，请稍后再试'),
   })
@@ -203,9 +227,8 @@ export function MobileLayout() {
       setStatusOverride((current) => ({ ...current, [item.id]: 'rejected' }))
       setRejectTarget(null)
       rejectForm.resetFields()
+      invalidateRelatedQueries('new-cat')
       message.success('已拒绝')
-      void queryClient.invalidateQueries({ queryKey: ['admin-new-cats'] })
-      void queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] })
     },
     onError: (error) => message.error(error instanceof Error ? error.message : '拒绝失败，请稍后再试'),
   })
@@ -241,7 +264,7 @@ export function MobileLayout() {
       <section className="mb-5 rounded-b-[24px] bg-white px-5 pb-5 pt-5 shadow-[0_2px_15px_rgba(0,0,0,0.04)]">
         <div className="mb-4 flex items-center justify-between">
           <h1 className="text-[22px] font-bold text-[#2c3e50]">审核新猫</h1>
-          <span className="rounded-lg bg-[#f1f5f9] px-2 py-1 text-[11px] text-[#94a3b8]">{`待审核 ${counts.pending}`}</span>
+          <span className="rounded-lg bg-[#f1f5f9] px-2 py-1 text-[11px] text-[#94a3b8]">{`本页待审核 ${counts.pending}`}</span>
         </div>
 
         <Input
@@ -258,6 +281,7 @@ export function MobileLayout() {
           {filters.map((item) => (
             <button
               key={item.key}
+              aria-pressed={activeFilter === item.key}
               className={clsx(
                 'whitespace-nowrap rounded-full border px-4 py-2 text-[13px] transition',
                 activeFilter === item.key
@@ -267,7 +291,7 @@ export function MobileLayout() {
               onClick={() => setActiveFilter(item.key)}
               type="button"
             >
-              {`${item.label} ${counts[item.key]}`}
+              {item.label}
             </button>
           ))}
         </div>
@@ -361,6 +385,7 @@ export function MobileLayout() {
             })}
           </div>
         </QueryState>
+        <ListPagination data={query.data?.data} page={page} onChange={filtersState.setPage} loading={query.isFetching} />
       </div>
 
       <Modal

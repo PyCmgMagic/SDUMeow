@@ -8,8 +8,9 @@ import logo from '@/assets/猫猫图鉴-logo.png'
 import { useAuth } from '@/hooks/useAuth'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { STORAGE_KEYS } from '@/utils/constants'
-import { storage } from '@/utils/storage'
 import { withAppBasePath } from '@/utils/appPath'
+import { setAuthIntent } from '@pc/lib/auth'
+import { safeAuthRedirect } from '@shared/authRedirect'
 
 function shouldBridgeToLocalhost(): boolean {
   return ['127.0.0.1', '0.0.0.0'].includes(window.location.hostname)
@@ -19,7 +20,6 @@ function buildLocalhostLoginUrl(mode: 'user' | 'admin'): string {
   const url = new URL(window.location.href)
   url.hostname = 'localhost'
   url.pathname = withAppBasePath('/login')
-  url.search = ''
   url.searchParams.set('auth_mode', mode)
   return url.toString()
 }
@@ -43,14 +43,15 @@ export function MobileLayout() {
       return
     }
 
-    sessionStorage.setItem(STORAGE_KEYS.authLoginMode, mode)
-    localStorage.setItem(STORAGE_KEYS.authLoginMode, mode)
+    const state = location.state as { from?: unknown } | null
+    const requestedRedirect = new URLSearchParams(location.search).get('redirect') || state?.from
+    setAuthIntent(mode, safeAuthRedirect(requestedRedirect, mode === 'admin' ? '/admin/dashboard' : '/'))
     if (mode === 'user') {
       window.location.assign(loginUrl)
       return
     }
     window.location.assign(adminLoginUrl)
-  }, [adminLoginUrl, loginUrl])
+  }, [adminLoginUrl, loginUrl, location.search, location.state])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -69,21 +70,26 @@ export function MobileLayout() {
     const state = typeof location.state === 'object' && location.state !== null ? location.state as { loginNotice?: unknown } : {}
     const stateNotice = typeof state.loginNotice === 'string' ? state.loginNotice : ''
     const storedNotice = window.sessionStorage.getItem(STORAGE_KEYS.authLoginNotice) ?? ''
-    const notice = stateNotice || storedNotice
+    const params = new URLSearchParams(location.search)
+    const queryNotice = params.get('expired') === '1' ? '登录已过期，请重新登录'
+      : params.has('authError') ? '统一认证登录失败，请重试' : ''
+    const notice = stateNotice || storedNotice || queryNotice
     if (!notice) return
 
     hasShownLoginNoticeRef.current = true
     window.sessionStorage.removeItem(STORAGE_KEYS.authLoginNotice)
     setLoginNotice(notice)
-  }, [location.state])
+  }, [location.search, location.state])
 
   const handleLoginNoticeClose = () => {
     setLoginNotice('')
-    navigate('/login', { replace: true, state: null })
+    const params = new URLSearchParams(location.search)
+    params.delete('expired')
+    params.delete('authError')
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true, state: null })
   }
 
   const handleGuest = () => {
-    storage.clearToken()
     enterGuest()
     navigate('/', { replace: true })
   }
@@ -91,7 +97,7 @@ export function MobileLayout() {
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-[390px] flex-col items-center bg-white px-6 pb-10 pt-24">
       <div className="mb-7">
-        <img alt="SDU Meow logo" className="h-28 w-auto rounded-3xl object-contain" src={logo} />
+        <img alt="MEOW logo" className="h-28 w-auto rounded-3xl object-contain" src={logo} />
       </div>
       <h1 className="text-[26px] font-bold text-[#1a1a1a]">Hello, 校友</h1>
       <p className="mt-2 text-[14px] text-[#9e9e9e]">欢迎回到猫猫图鉴</p>

@@ -17,7 +17,6 @@ import { getMe } from '@/api/endpoints/user'
 import { useAuth } from '@/hooks/useAuth'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { asRecord, asString } from '@/utils/format'
-import { storage } from '@/utils/storage'
 
 const ADMIN_AVATAR_STORAGE_KEY = 'admin:me:avatar'
 
@@ -74,7 +73,6 @@ export function MobileLayout() {
   }
 
   const onLogout = () => {
-    storage.clearToken('admin')
     logout()
     navigate('/login', { replace: true })
   }

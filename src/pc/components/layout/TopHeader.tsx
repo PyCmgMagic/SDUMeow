@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Bell, Menu, Search, X } from 'lucide-react'
 
+import logo from '@/assets/猫猫图鉴-logo.png'
 import { Input } from '@pc/components/ui/input'
 import { catApi, typeApi } from '@pc/lib/api'
 import { useUserStore } from '@pc/stores/user'
@@ -36,6 +37,7 @@ export function TopHeader({ navigationOpen, onToggleNavigation }: TopHeaderProps
   const isAdminRoute = route.pathname.includes('/admin/cats')
   const pageTitle = useMemo(() => {
     const titles: Record<string, string> = {
+      team: '开发团队',
       sos: '紧急 SOS',
       adopt: '申请领养',
       'post-moment': '发布动态',
@@ -127,7 +129,7 @@ export function TopHeader({ navigationOpen, onToggleNavigation }: TopHeaderProps
       // 在 AdminCatView 中，更新搜索查询参数
       router(withQuery(route.pathname, { search: q || undefined, page: '1' }))
     } else {
-      router(q ? `/?search=${encodeURIComponent(q)}` : '/')
+      router(withQuery('/', { search: q || undefined, page: '1' }))
     }
     setSuggestions([])
     setSearchedKeyword('')
@@ -170,7 +172,7 @@ export function TopHeader({ navigationOpen, onToggleNavigation }: TopHeaderProps
 
   // 监听路由变化，同步搜索框值
   useEffect(() => {
-    if (isAdminRoute) {
+    if (isAdminRoute || route.pathname === '/') {
       setQuery(new URLSearchParams(route.search).get('search') || '')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -181,7 +183,7 @@ export function TopHeader({ navigationOpen, onToggleNavigation }: TopHeaderProps
   }, [token, fetchPreview])
 
   return (
-    <header className="public-header sticky top-0 z-[100] grid h-[64px] w-full grid-cols-[minmax(0,1fr)_auto] items-center border-b border-gray-200 bg-meow-bg px-4 sm:grid-cols-3 sm:px-6">
+    <header className="public-header sticky top-0 z-[100] grid h-[64px] w-full grid-cols-[minmax(0,1fr)_auto] items-center border-b border-gray-200 bg-meow-bg gap-3 px-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-6 sm:px-6">
       <div className="flex min-w-0 items-center text-xs text-gray-500 tracking-wider sm:text-sm">
         <button
           type="button"
@@ -193,9 +195,9 @@ export function TopHeader({ navigationOpen, onToggleNavigation }: TopHeaderProps
         >
           <Menu className="h-5 w-5" />
         </button>
-        <span className="hover:text-primary cursor-pointer transition-colors">SDU Meow</span>
-        <span className="mx-2 text-gray-300">&gt;</span>
-        <span className="font-bold text-gray-900">{pageTitle}</span>
+        <img src={logo} alt="猫猫图鉴 logo" className="h-10 w-10 shrink-0 rounded-[10px] object-contain" />
+        <span className="mx-2 shrink-0 text-gray-400" aria-hidden="true">/</span>
+        <span className="min-w-0 truncate font-bold text-gray-900">{pageTitle}</span>
       </div>
       {/* 搜索框 */}
       <div className="hidden justify-center w-full group sm:flex">

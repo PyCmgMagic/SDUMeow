@@ -1,3 +1,4 @@
+import { invalidateRelatedQueries } from '@shared/mutationSync'
 import {
   ArrowLeftOutlined,
   CameraOutlined,
@@ -22,6 +23,7 @@ import { getColors, getLocations, getRoles, getTags } from '@/api/endpoints/type
 import { getMe } from '@/api/endpoints/user'
 import { QueryState } from '@/components/feedback/QueryState'
 import { usePageTitle } from '@/hooks/usePageTitle'
+import { useAuthStore } from '@shared/auth.store'
 import { CAT_METRIC_LABELS } from './shared'
 import type { ApiResult } from '@/types/api'
 import { asArray, asRecord, asString, toPaged } from '@/utils/format'
@@ -354,10 +356,8 @@ export function MobileLayout() {
         okText: '知道了',
       })
 
-      void queryClient.invalidateQueries({ queryKey: ['leaderboard', 'popularity'] })
-      void queryClient.invalidateQueries({ queryKey: ['cats', 'home'] })
-      void queryClient.invalidateQueries({ queryKey: ['me'] })
-      void queryClient.invalidateQueries({ queryKey: ['cat-detail', id] })
+      invalidateRelatedQueries('feed', id)
+      void useAuthStore.getState().fetchUserInfo()
     },
     onError: (error) => message.error(error instanceof Error ? error.message : '投喂失败，请稍后重试'),
   })

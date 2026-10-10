@@ -1,13 +1,18 @@
 import type { BadgeDisplayItem, UnknownRecord } from '@pc/types'
 
-import firstMeetingIcon from '@pc/assets/badges/first-meeting.png'
-import sharingAmbassadorIcon from '@pc/assets/badges/sharing-ambassador.png'
-import leaderboardKingIcon from '@pc/assets/badges/leaderboard-king.png'
-import recorderIcon from '@pc/assets/badges/recorder.png'
-import scienceExpertIcon from '@pc/assets/badges/science-expert.png'
-import adopterIcon from '@pc/assets/badges/adopter.png'
-import guardianAngelIcon from '@pc/assets/badges/guardian-angel.png'
-import explorerIcon from '@pc/assets/badges/explorer.png'
+import firstMeetingIcon from '@/assets/徽章-初次见面.png'
+import sharingAmbassadorIcon from '@/assets/徽章-传播大使.png'
+import leaderboardKingIcon from '@/assets/徽章-打榜王.png'
+import recorderIcon from '@/assets/徽章-记录者.png'
+import scienceExpertIcon from '@/assets/徽章-科普达人.png'
+import adopterIcon from '@/assets/徽章-领养人.png'
+import guardianAngelIcon from '@/assets/徽章-守护天使.png'
+import explorerIcon from '@/assets/徽章-探索家.png'
+import postsIcon from '@/assets/发布帖子.png'
+import likesIcon from '@/assets/收到点赞.png'
+import feedIcon from '@/assets/投喂.png'
+import streakCheckinIcon from '@/assets/连续签到.png'
+import totalCheckinIcon from '@/assets/累计签到.png'
 
 const asRecord = (value: unknown): UnknownRecord | null => (
   value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null
@@ -48,17 +53,97 @@ const explicitIcon = (source: UnknownRecord) => {
   return icon && icon !== '暂无' && !icon.includes('暂无') ? icon : undefined
 }
 
-const localIcon = (name: string, code: string) => {
-  const value = `${name} ${code}`
-  if (/初次|见面|首次|投喂.?10/.test(value)) return firstMeetingIcon
-  if (/传播|分享|大使/.test(value)) return sharingAmbassadorIcon
-  if (/打榜|榜王|排行榜/.test(value)) return leaderboardKingIcon
-  if (/记录|记录者/.test(value)) return recorderIcon
-  if (/科普|知识|达人/.test(value)) return scienceExpertIcon
-  if (/领养|领养人/.test(value)) return adopterIcon
-  if (/守护|天使/.test(value)) return guardianAngelIcon
-  if (/探索|探索家/.test(value)) return explorerIcon
-  return undefined
+const artwork = [
+  { name: '初次见面', icon: firstMeetingIcon, pattern: /初次见面|初次相遇|first[_ -]?meet(?:ing)?/i },
+  { name: '传播大使', icon: sharingAmbassadorIcon, pattern: /传播|分享|sharing|share|ambassador/i },
+  { name: '打榜王', icon: leaderboardKingIcon, pattern: /打榜|榜王|排行榜|leaderboard|ranking/i },
+  { name: '记录者', icon: recorderIcon, pattern: /记录者|记录|recorder/i },
+  { name: '科普达人', icon: scienceExpertIcon, pattern: /科普|知识|science|knowledge/i },
+  { name: '领养人', icon: adopterIcon, pattern: /领养|adopt/i },
+  { name: '守护天使', icon: guardianAngelIcon, pattern: /守护|天使|救助|救援|guardian|rescue|sos/i },
+  { name: '探索家', icon: explorerIcon, pattern: /探索|发现.*猫|新猫|explor|discover|found[_ -]?(?:new[_ -]?)?cat/i },
+  { name: '发布帖子', icon: postsIcon, pattern: /发(?:布)?帖|发布动态|post|moment/i, ids: [1, 4] },
+  { name: '收到点赞', icon: likesIcon, pattern: /点赞|获赞|收到.*赞|like/i, ids: [5, 9] },
+  { name: '投喂', icon: feedIcon, pattern: /投喂|喂养|feed/i, ids: [10, 14] },
+  { name: '连续签到', icon: streakCheckinIcon, pattern: /连续签到|签到.*连续|streak|continuous[_ -]?check[_ -]?in|check[_ -]?in[_ -]?continuous/i, ids: [15, 19] },
+  { name: '累计签到', icon: totalCheckinIcon, pattern: /累计签到|签到.*累计|total[_ -]?check[_ -]?in|check[_ -]?in[_ -]?total/i, ids: [20, 24] },
+]
+
+const relevance = (item: BadgeDisplayItem, asset: typeof artwork[number]): number => {
+  if (item.name === asset.name) return 1200
+  if (asset.pattern.test(item.code || '')) return 1000
+  if (asset.pattern.test(item.name)) return 900
+  if (asset.pattern.test(`${item.groupCode || ''} ${item.ruleType || ''} ${item.groupName || ''}`)) return 700
+  if (asset.pattern.test(item.description)) return 400
+  return 0
+}
+
+// Maximum-weight one-to-one assignment. Dummy columns leave unrelated artwork unused.
+const assignArtwork = (items: BadgeDisplayItem[]) => {
+  const ordered = [...items].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }))
+  const scores = artwork.map((asset) => ordered.map((item) => relevance(item, asset)))
+  for (let column = 0; column < ordered.length; column++) {
+    if (scores.some((row) => row[column] > 0)) continue
+    const id = Number(ordered[column].id)
+    artwork.forEach((asset, row) => {
+      if (asset.ids && id >= asset.ids[0]! && id <= asset.ids[1]!) scores[row]![column] = 250
+    })
+  }
+  const columns = ordered.length + artwork.length
+  const rowPotential = Array(artwork.length + 1).fill(0) as number[]
+  const columnPotential = Array(columns + 1).fill(0) as number[]
+  const matchedRow = Array(columns + 1).fill(0) as number[]
+  const previous = Array(columns + 1).fill(0) as number[]
+  for (let row = 1; row <= artwork.length; row++) {
+    matchedRow[0] = row
+    let column = 0
+    const distance = Array(columns + 1).fill(Infinity) as number[]
+    const visited = Array(columns + 1).fill(false) as boolean[]
+    do {
+      visited[column] = true
+      const currentRow = matchedRow[column]!
+      let delta = Infinity
+      let nextColumn = 0
+      for (let candidate = 1; candidate <= columns; candidate++) {
+        if (visited[candidate]) continue
+        const cost = -(scores[currentRow - 1]![candidate - 1] || 0) - rowPotential[currentRow]! - columnPotential[candidate]!
+        if (cost < distance[candidate]!) {
+          distance[candidate] = cost
+          previous[candidate] = column
+        }
+        if (distance[candidate]! < delta) {
+          delta = distance[candidate]!
+          nextColumn = candidate
+        }
+      }
+      for (let candidate = 0; candidate <= columns; candidate++) {
+        if (visited[candidate]) {
+          rowPotential[matchedRow[candidate]!]! += delta
+          columnPotential[candidate]! -= delta
+        } else distance[candidate]! -= delta
+      }
+      column = nextColumn
+    } while (matchedRow[column] !== 0)
+    do {
+      const predecessor = previous[column]!
+      matchedRow[column] = matchedRow[predecessor]!
+      column = predecessor
+    } while (column !== 0)
+  }
+  const assigned = new Map<string, string>()
+  for (let column = 1; column <= ordered.length; column++) {
+    const row = matchedRow[column]! - 1
+    if (row >= 0 && scores[row]![column - 1]! > 0) assigned.set(ordered[column - 1]!.id, artwork[row]!.icon)
+  }
+  const used = new Set(assigned.values())
+  // Keep explicit server artwork only when it is not already used by another achievement.
+  for (const item of ordered) {
+    if (!assigned.has(item.id) && item.iconUrl && !used.has(item.iconUrl)) {
+      assigned.set(item.id, item.iconUrl)
+      used.add(item.iconUrl)
+    }
+  }
+  return items.map((item) => ({ ...item, iconUrl: assigned.get(item.id) }))
 }
 
 type ProgressContext = {
@@ -117,7 +202,7 @@ const normalizeBadge = (raw: unknown, earnedDefault: boolean, group?: UnknownRec
     ruleType: firstString(source, ['ruleType']) || firstString(groupSource, ['ruleType']),
     name,
     description: firstString(source, ['description', 'desc', 'condition']),
-    iconUrl: localIcon(name, code) || explicitIcon(source),
+    iconUrl: explicitIcon(source),
     earned,
     earnedAt: firstString(source, ['earnedAt', 'earned_at', 'obtainedAt', 'unlockTime', 'acquiredAt']) || undefined,
     progress,
@@ -204,6 +289,13 @@ export const normalizeBadges = (allRaw: unknown, mineRaw: unknown, progressRaw?:
     const existing = byId.get(key)
     const groupProgress = item.groupCode ? progressByCode.get(item.groupCode) : undefined
     const merged = { ...existing, ...item, earned: item.earned || existing?.earned || false }
+    if (existing) {
+      if (item.name === `徽章 #${item.id}`) merged.name = existing.name
+      for (const field of ['description', 'groupCode', 'groupName', 'ruleType', 'iconUrl', 'earnedAt', 'progress', 'target', 'threshold', 'tier', 'tierName', 'progressPercentage'] as const) {
+        if (item[field] === undefined || item[field] === '') Object.assign(merged, { [field]: existing[field] })
+      }
+      if (item.code === item.id) merged.code = existing.code
+    }
     if (groupProgress && merged.progress === undefined) merged.progress = groupProgress.currentValue
     if (groupProgress && merged.target === undefined) merged.target = groupProgress.target
     if (merged.earned) merged.progressPercentage = 100
@@ -213,5 +305,5 @@ export const normalizeBadges = (allRaw: unknown, mineRaw: unknown, progressRaw?:
     byId.set(key, merged)
     if (item.code) idByCode.set(item.code, key)
   }
-  return [...byId.values()]
+  return assignArtwork([...byId.values()])
 }
