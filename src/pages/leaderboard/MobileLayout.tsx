@@ -237,7 +237,7 @@ export function MobileLayout() {
                   {first ? <CrownFilled className="absolute -top-5 left-1/2 -translate-x-1/2 text-[22px] text-[#ffd700]" /> : null}
                   <div
                     className={clsx(
-                      'overflow-hidden rounded-full bg-gradient-to-br from-[#d1d5db] to-[#94a3b8]',
+                      'mx-auto overflow-hidden rounded-full bg-gradient-to-br from-[#d1d5db] to-[#94a3b8]',
                       first ? 'h-[90px] w-[90px] border-4 border-[#ffd700]' : 'h-[72px] w-[72px] border-4 border-white',
                     )}
                   >
