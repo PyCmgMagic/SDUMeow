@@ -13,7 +13,7 @@ import type { ChangeEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { normalizeCats } from '@/api/adapters/cats'
-import { uploadImages } from '@/api/endpoints/cos'
+import { uploadImages } from '@/api/endpoints/s3'
 import { getCats } from '@/api/endpoints/cats'
 import { publishMoment } from '@/api/endpoints/moments'
 import { usePageTitle } from '@/hooks/usePageTitle'

@@ -19,7 +19,7 @@ import {
   normalizeDynamicTypeOptions,
   type DynamicTypeOption,
 } from '@/api/adapters/types'
-import { uploadImages } from '@/api/endpoints/cos'
+import { uploadImages } from '@/api/endpoints/s3'
 import { getCats } from '@/api/endpoints/cats'
 import { createSos } from '@/api/endpoints/sos'
 import { getColors, getLocations, getSymptoms } from '@/api/endpoints/types'

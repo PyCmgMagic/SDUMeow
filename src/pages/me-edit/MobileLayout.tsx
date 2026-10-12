@@ -4,7 +4,7 @@ import { Form, Input, Select, message } from 'antd'
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { uploadImageKeys } from '@/api/endpoints/cos'
+import { uploadImageKeys } from '@/api/endpoints/s3'
 import { getMe, updateAvatar, updateMe } from '@/api/endpoints/user'
 import { QueryState } from '@/components/feedback/QueryState'
 import { usePageTitle } from '@/hooks/usePageTitle'
@@ -274,4 +274,3 @@ export function MobileLayout() {
     </div>
   )
 }
-

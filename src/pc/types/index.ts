@@ -102,13 +102,9 @@ export interface PrepareImageUploadRequest {
   types: ImageUploadType[];
 }
 
-export interface CosImageUploadCredentials {
-  tmpSecretId: string;
-  tmpSecretKey: string;
-  sessionToken: string;
-  bucket: string;
-  region: string;
+export interface PresignedImageUploads {
   keys: string[];
+  uploadUrls: string[];
 }
 
 export interface FeedCatResult {

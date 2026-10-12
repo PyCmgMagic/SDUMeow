@@ -1,6 +1,5 @@
-import COS from 'cos-js-sdk-v5'
-import { cosApi } from '@pc/lib/api'
-import type { CosImageUploadCredentials, ImageUploadType } from '@pc/types'
+import { imageUploadApi } from '@pc/lib/api'
+import type { ImageUploadType, PresignedImageUploads } from '@pc/types'
 
 export const IMAGE_FILE_ACCEPT = '.jpg,.png,image/jpeg,image/png'
 
@@ -13,17 +12,17 @@ const getImageUploadType = (file: File): ImageUploadType | null => {
 
 export const isSupportedImageFile = (file: File) => Boolean(getImageUploadType(file))
 
-const assertCredentials = (credentials: CosImageUploadCredentials, fileCount: number) => {
-  const required = [
-    credentials.tmpSecretId,
-    credentials.tmpSecretKey,
-    credentials.sessionToken,
-    credentials.bucket,
-    credentials.region,
-  ]
-
-  if (required.some((value) => !value?.trim()) || credentials.keys.length !== fileCount || credentials.keys.some((key) => !key?.trim())) {
-    throw new Error('图片上传凭证格式无效，请联系后端检查 /cos/upload-image 响应')
+const assertPresignedUploads = (uploads: PresignedImageUploads, fileCount: number) => {
+  if (
+    !uploads ||
+    !Array.isArray(uploads.keys) ||
+    !Array.isArray(uploads.uploadUrls) ||
+    uploads.keys.length !== fileCount ||
+    uploads.uploadUrls.length !== fileCount ||
+    uploads.keys.some((key) => typeof key !== 'string' || !key.trim()) ||
+    uploads.uploadUrls.some((url) => typeof url !== 'string' || !url.trim())
+  ) {
+    throw new Error('图片上传地址格式无效，请联系后端检查 /s3/upload-image 响应')
   }
 }
 
@@ -36,27 +35,24 @@ export const uploadImages = async (files: File[], authScope: 'user' | 'admin' = 
     return type
   })
 
-  const credentials = await cosApi.prepareImageUploads({ types }, authScope)
-  assertCredentials(credentials, files.length)
+  const uploads = await imageUploadApi.prepareImageUploads({ types }, authScope)
+  assertPresignedUploads(uploads, files.length)
 
-  const cos = new COS({
-    SecretId: credentials.tmpSecretId,
-    SecretKey: credentials.tmpSecretKey,
-    SecurityToken: credentials.sessionToken,
+  await Promise.all(files.map((file, index) =>
+    putObjectToPresignedUrl(file, uploads.uploadUrls[index]!),
+  ))
+
+  return uploads.keys
+}
+
+async function putObjectToPresignedUrl(file: File, uploadUrl: string): Promise<void> {
+  const response = await fetch(uploadUrl, {
+    method: 'PUT',
+    body: file,
+    credentials: 'omit',
   })
 
-  await Promise.all(files.map((file, index) => {
-    const key = credentials.keys[index]
-    if (!key) throw new Error('图片上传队列异常')
-
-    return cos.putObject({
-      Bucket: credentials.bucket,
-      Region: credentials.region,
-      Key: key,
-      Body: file,
-      ContentType: file.type || undefined,
-    })
-  }))
-
-  return credentials.keys
+  if (!response.ok) {
+    throw new Error(`图片上传失败，HTTP ${response.status}`)
+  }
 }

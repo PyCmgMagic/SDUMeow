@@ -68,7 +68,7 @@ import type{
     NotificationQueryParams,
     FlexiblePageResult,
     PrepareImageUploadRequest,
-    CosImageUploadCredentials,
+    PresignedImageUploads,
     SubmitNewCatParams,
     TypeOption,
     TagTypeOption,
@@ -318,9 +318,9 @@ export const newCatApi = {
   submitNewCat: (data: SubmitNewCatParams) => http.post<NewCatResponse>('/new-cats', data)
 }
 
-export const cosApi = {
+export const imageUploadApi = {
   prepareImageUploads: (data: PrepareImageUploadRequest, authScope: 'user' | 'admin' = 'user') =>
-    http.post<CosImageUploadCredentials>('/cos/upload-image', data, { authScope })
+    http.post<PresignedImageUploads>('/s3/upload-image', data, { authScope })
 }
 
 export const typeApi = {
