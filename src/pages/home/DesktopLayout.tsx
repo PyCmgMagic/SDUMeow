@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@pc/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@pc/components/ui/select'
 import { catApi, typeApi } from '@pc/lib/api';
 import { useUserStore } from '@pc/stores/user';
 import type { Campus, CatListItem, TypeOption } from '@pc/types';
@@ -242,12 +243,17 @@ return (
     </div>
 
     <section className="flex min-w-0 flex-col gap-6">
-      <label className="flex items-center gap-3 text-sm">
-        校区
-        <select className="rounded-lg border border-gray-200 bg-white px-3 py-2" value={filters.campus} onChange={(event) => filters.setCampus(event.target.value)}>
-          {campusOptions.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}
-        </select>
-      </label>
+      <div className="flex items-center gap-3 text-sm">
+        <label htmlFor="home-campus">校区</label>
+        <Select value={filters.campus} onValueChange={filters.setCampus}>
+          <SelectTrigger id="home-campus" className="w-48 bg-card">
+            <SelectValue placeholder="选择校区" />
+          </SelectTrigger>
+          <SelectContent>
+            {campusOptions.map((item) => <SelectItem key={item.code} value={item.code}>{item.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
       <div className="flex flex-wrap gap-3">
         <Button onClick={() => selectColor(null)}
           className={cn('px-3 py-1 border-2 rounded-full text-sm', selectedColor === null ? 'bg-primary text-black border-primary' : 'bg-white text-black border-gray-200 hover:bg-primary')}>
