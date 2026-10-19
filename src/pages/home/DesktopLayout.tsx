@@ -189,7 +189,7 @@ return (
 
       <aside className="flex flex-col gap-6">
         {/* 每日签到卡片 */}
-        <div className="w-full rounded-2xl bg-gradient-to-br from-[#FFB347] to-[#FFCC33] p-5 shadow-lg">
+        <div className="home-checkin-card w-full rounded-2xl p-5 shadow-lg">
           <h3 className="text-white text-lg font-bold mb-2 flex items-center gap-2">
             <Calendar className="w-5 h-5" />
             每日签到

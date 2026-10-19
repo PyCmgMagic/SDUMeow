@@ -30,7 +30,7 @@ export function StatsBanner() {
 
   return (
     <div
-        className="w-full rounded-xl p-8 text-white shadow-lg relative overflow-hidden bg-gradient-to-r from-[#FFB74D] to-[#FF9800]">
+        className="home-stats-banner w-full rounded-xl p-8 text-white shadow-lg relative overflow-hidden">
         <div className="flex flex-col relative z-10 justify-between gap-8 md:flex-row">
             <div className="text-center md:text-left">
                 <h2 className="text-3xl font-bold mb-2 traking-wide text-white drop-shadow-md">

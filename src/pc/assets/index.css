@@ -152,6 +152,22 @@
 }
 
 @layer components {
+  /* Keep home card backgrounds independent of shared Tailwind gradient variables. */
+  .home-stats-banner {
+    background-color: #FF9800;
+    background-image: linear-gradient(to right, #FFB74D, #FF9800);
+  }
+
+  .home-checkin-card {
+    background-color: #FFB347;
+    background-image: linear-gradient(to bottom right, #FFB347, #FFCC33);
+  }
+
+  [data-public-theme='admin'] :is(.home-stats-banner, .home-checkin-card) {
+    background-color: #5CD6C2;
+    background-image: none;
+  }
+
   .admin-shell {
     background: var(--admin-shell-bg);
     color: hsl(var(--foreground));
